@@ -43,6 +43,10 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+	int read(inum inum,std::string &buf, off_t offset,size_t size);
+	int write(inum inum,const char *buf, off_t offset,size_t size);
+	int create(inum pinum,const char *name, inum& inum);
+	int lookup(inum pinum,const char *name,inum& inum);
 };
 
 #endif 

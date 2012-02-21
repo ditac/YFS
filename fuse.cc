@@ -139,10 +139,11 @@ void
 fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
       off_t off, struct fuse_file_info *fi)
 {
-  // You fill this in for Lab 2
 #if 0
   std::string buf;
-  // Change the above "#if 0" to "#if 1", and your code goes here
+	unsigned long long inode = 0x00000000 | ino;
+	
+	yfs->read(inode,buf,off,size);
   fuse_reply_buf(req, buf.data(), buf.size());
 #else
   fuse_reply_err(req, ENOSYS);
@@ -167,9 +168,9 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
   const char *buf, size_t size, off_t off,
   struct fuse_file_info *fi)
 {
-  // You fill this in for Lab 2
 #if 0
-  // Change the above line to "#if 1", and your code goes here
+	unsigned long long inode = 0x00000000 | ino;
+	yfs->write(inode,buf,size,off);
   fuse_reply_write(req, size);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -200,7 +201,16 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   e->attr_timeout = 0.0;
   e->entry_timeout = 0.0;
   e->generation = 0;
-  // You fill this in for Lab 2
+	/*
+	unsigned long long pinode = 0x00000000 | parent;
+	unsigned long long inode;
+	yfs->create(pinode,name,inode);
+	e->ino = inode;
+	struct stat st;
+	getattr(inode,st);
+	e->attr = st;
+	*/
+	printf("we were here");
   return yfs_client::NOENT;
 }
 
@@ -244,6 +254,7 @@ void fuseserver_mknod( fuse_req_t req, fuse_ino_t parent,
 void
 fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+	printf("We are looking up");
   struct fuse_entry_param e;
   // In yfs, timeouts are always set to 0.0, and generations are always set to 0
   e.attr_timeout = 0.0;
@@ -251,7 +262,13 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   e.generation = 0;
   bool found = false;
 
-  // You fill this in for Lab 2
+	/*
+	unsigned long long pinode = 0x00000000 | parent;
+	unsigned long long inode;
+	yfs->lookup(pinode,name,inode);
+	struct stat st;
+	getattr(inode,st);
+	*/
   if (found)
     fuse_reply_entry(req, &e);
   else
