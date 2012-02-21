@@ -14,6 +14,7 @@ class yfs_client {
   typedef unsigned long long inum;
   enum xxstatus { OK, RPCERR, NOENT, IOERR, EXIST };
   typedef int status;
+	typedef std::map<std::string,inum> dirmap;
 
   struct fileinfo {
     unsigned long long size;
@@ -45,8 +46,9 @@ class yfs_client {
   int getdir(inum, dirinfo &);
 	int read(inum inum,std::string &buf, off_t offset,size_t size);
 	int write(inum inum,const char *buf, off_t offset,size_t size);
-	int create(inum pinum,const char *name, inum& inum);
+	xxstatus create(inum pinum,const char *name, inum& inum);
 	int lookup(inum pinum,const char *name,inum& inum);
+	dirmap getDirList(inum inode);
 };
 
 #endif 

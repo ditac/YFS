@@ -118,24 +118,27 @@ yfs_client::write(inum inum,const char *buf, off_t offset,size_t size)
 	return r;
 }
 
-int
+yfs_client::xxstatus
 yfs_client::create(inum pinum,const char *name,inum& inum)
 {
-	int r = OK;	
+	xxstatus r = OK;	
   srand ( time(NULL) );	
 	int randInt = rand();
 	unsigned long long randInode = 0x00000000 | randInt;
-	inum = 0x01111111 & randInode;
+	inum = 0x80000000 | randInode;
 	std::string buf;
 	std::string strName(name);
 	ec->get(pinum,buf);
+	std::cout << "Printing buffer" << buf;
 	size_t found = buf.find(strName);
 	if(found != std::string::npos)
 	{
 		//We have to handle this case	
+		r = EXIST; 
 	}
 	else
 	{
+		printf("Oh we didnt find you\n");
 		std::string empty;
 		ec->put(inum,empty);
 		std::string newEntry = "<" + strName + "," + filename(inum) + ">\n";
@@ -153,7 +156,7 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 	std::string strName(name);
 	ec->get(pinum,buf);
 	size_t found = buf.find(strName);
-	if(found != std::string::npos)
+	if(found == std::string::npos)
 	{
 		r = NOENT;
 	}
@@ -164,5 +167,28 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
 	}
+	std::cout << "We shouldnt have worked" << r;
 	return r;
 }
+
+yfs_client::dirmap 
+yfs_client::getDirList(inum pinode)
+{
+	yfs_client::dirmap dirList;
+	std::string buf;
+	ec->get(pinode,buf);
+	
+	size_t found = 0;
+	size_t start = buf.find(",",found);
+	size_t end = buf.find(">",start + 1);
+	while(found != std::string::npos)
+	{
+		std::string strInum = buf.substr(start, end - start - 1);
+		inum inode= n2i(strInum);
+		std::string name = buf.substr(found,start-found);
+		dirList[name] = inode;
+		found = buf.find("\n",found);
+	}
+	return dirList;
+}
+

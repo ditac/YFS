@@ -201,17 +201,14 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   e->attr_timeout = 0.0;
   e->entry_timeout = 0.0;
   e->generation = 0;
-	/*
 	unsigned long long pinode = 0x00000000 | parent;
-	unsigned long long inode;
-	yfs->create(pinode,name,inode);
+	unsigned long long inode = 0x00000000;
+	yfs_client::xxstatus retVal = yfs->create(pinode,name,inode);
 	e->ino = inode;
 	struct stat st;
 	getattr(inode,st);
 	e->attr = st;
-	*/
-	printf("we were here");
-  return yfs_client::NOENT;
+  return retVal;
 }
 
 void
@@ -254,23 +251,23 @@ void fuseserver_mknod( fuse_req_t req, fuse_ino_t parent,
 void
 fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	printf("We are looking up");
   struct fuse_entry_param e;
   // In yfs, timeouts are always set to 0.0, and generations are always set to 0
   e.attr_timeout = 0.0;
   e.entry_timeout = 0.0;
   e.generation = 0;
   bool found = false;
-
-	/*
 	unsigned long long pinode = 0x00000000 | parent;
-	unsigned long long inode;
-	yfs->lookup(pinode,name,inode);
-	struct stat st;
+	unsigned long long inode = 0x00000000;
+  yfs_client::status ret;
+	ret = yfs->lookup(pinode,name,inode);
+	found = (ret == yfs_client::OK);
+	  if (found)
+	{
+		struct stat st;
 	getattr(inode,st);
-	*/
-  if (found)
     fuse_reply_entry(req, &e);
+	}
   else
     fuse_reply_err(req, ENOENT);
 }
@@ -325,10 +322,15 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
   memset(&b, 0, sizeof(b));
 
-
-  // You fill this in for Lab 2
-
-
+	unsigned long long inode = 0x00000000 | ino;
+	std::map<std::string,unsigned long long> dirList = yfs->getDirList(inode);
+	std::map<std::string,unsigned long long>::iterator itr = dirList.begin();
+	for(;itr!=dirList.end();itr++)
+	{
+		char *cpy = new char[itr->first.size()+1] ;
+		strcpy(cpy, itr->first.c_str());
+		dirbuf_add(&b,cpy,itr->second);	
+	}
   reply_buf_limited(req, b.p, b.size, off, size);
   free(b.p);
 }
