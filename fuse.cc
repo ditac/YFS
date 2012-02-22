@@ -266,10 +266,15 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	{
 		struct stat st;
 	getattr(inode,st);
+	e.ino = inode;
+	e.attr = st;
     fuse_reply_entry(req, &e);
 	}
   else
+	{
     fuse_reply_err(req, ENOENT);
+		printf("This guy failed");
+	}
 }
 
 
@@ -313,8 +318,6 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
   yfs_client::inum inum = ino; // req->in.h.nodeid;
   struct dirbuf b;
 
-  printf("fuseserver_readdir\n");
-
   if(!yfs->isdir(inum)){
     fuse_reply_err(req, ENOTDIR);
     return;
@@ -325,10 +328,12 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	unsigned long long inode = 0x00000000 | ino;
 	std::map<std::string,unsigned long long> dirList = yfs->getDirList(inode);
 	std::map<std::string,unsigned long long>::iterator itr = dirList.begin();
+	std::cout << "DirListSize" << dirList.size();
 	for(;itr!=dirList.end();itr++)
 	{
 		char *cpy = new char[itr->first.size()+1] ;
 		strcpy(cpy, itr->first.c_str());
+		cpy[itr->first.size()] = '\0';	
 		dirbuf_add(&b,cpy,itr->second);	
 	}
   reply_buf_limited(req, b.p, b.size, off, size);

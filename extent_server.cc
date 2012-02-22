@@ -23,22 +23,22 @@ extent_server::extent_server()
 
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
-	printf("put Lock acquired");
 	ScopedLock rwl(&extent_server_m_);
 	extent_protocol::attr a;
 	a.size = buf.size();
   a.atime = 0;
   a.mtime = (unsigned int) time(NULL);
   a.ctime = (unsigned int) time(NULL);
-	fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(id,fileVal(buf,a)));
-	printf("put Lock released");
+	fileVal val(buf,a);
+	fileList[id] = val;
+	fileListIter iter = fileList.find(1);
   return extent_protocol::OK;
 }
 
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
-	printf("get Lock acquired");
 	ScopedLock rwl(&extent_server_m_);
+	std::cout << "GETTING___" << fileList.size() << "\n";
 	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
 	fileListIter iter = fileList.find(id);
 	if(iter != fileList.end())
@@ -48,13 +48,11 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 		fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(id,iter->second));
 		retVal = extent_protocol::OK;	
 	}
-	printf("get Lock acquired");
   return retVal;
 }
 
 int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr &a)
 {
-	printf("get attr acquired");
 	ScopedLock rwl(&extent_server_m_);
 	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
 	fileListIter iter = fileList.find(id);
@@ -66,13 +64,12 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
   	a.ctime = iter->second.attr.ctime;
 		retVal = extent_protocol::OK;	
 	}
-	printf("get attr released");
   return retVal;
 }
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
-	printf("remove acquired");
+	std::cout << "Oh we were called";
 	ScopedLock rwl(&extent_server_m_);
 	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
 	fileListIter iter = fileList.find(id);
@@ -81,7 +78,6 @@ int extent_server::remove(extent_protocol::extentid_t id, int &)
 		fileList.erase(id);
 		retVal = extent_protocol::OK;
 	}
-	printf("remove released");
   return retVal;
 }
 

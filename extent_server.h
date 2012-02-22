@@ -20,11 +20,16 @@ class extent_server {
  private:
 	pthread_mutex_t extent_server_m_; // protect reply window et al
 	struct fileVal{
+		fileVal()
+		{
+
+		}
 		fileVal(std::string inBuf, extent_protocol::attr inAttr)
 		{
 			buf = inBuf;
 			attr = inAttr;
-		}
+		} 
+		
 		std::string buf;
 		extent_protocol::attr attr;
 	};
