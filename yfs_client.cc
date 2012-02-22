@@ -146,14 +146,13 @@ yfs_client::create(inum pinum,const char *name,inum& inum)
 	size_t found = buf.find(strName);
 	if(found != std::string::npos)
 	{
-		//We have to handle this case	
 		r = EXIST; 
 	}
 	else
 	{
 		std::string empty;
 		ec->put(inum,empty);
-		std::string newEntry = "<" + strName + "," + filename(inum) + ">\n";
+		std::string newEntry = strName + '\0' + filename(inum) + '\0';
 		buf.append(newEntry);
 		ec->put(pinum,buf);
 	}
@@ -174,8 +173,8 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 	}
 	else
 	{
-		size_t start = buf.find(",",found) + 1;
-		size_t end = buf.find(">",start);
+		size_t start = buf.find('\0',found) + 1;
+		size_t end = buf.find('\0',start);
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
 	}
@@ -189,18 +188,20 @@ yfs_client::getDirList(inum pinode)
 	std::string buf;
 	ec->get(pinode,buf);
 	
-	size_t nameStart = buf.find("<");
-	size_t nameEnd = buf.find(",",nameStart);
-	size_t numberEnd = buf.find(">",nameEnd + 1);
-	while(nameStart != std::string::npos)
+	size_t nameStart = 0;
+	size_t nameEnd = buf.find('\0',nameStart);
+	size_t numberEnd = buf.find('\0',nameEnd + 1);
+	while(numberEnd != std::string::npos)
 	{
-		std::string name = buf.substr(nameStart + 1,nameEnd - nameStart -1);
+		std::string name = buf.substr(nameStart,nameEnd - nameStart);
 		std::string strInum = buf.substr(nameEnd + 1, numberEnd - nameEnd - 1);
 		inum inode= n2i(strInum);
 		dirList[name] = inode;
-	nameStart = buf.find("<",numberEnd);
-	nameEnd = buf.find(",",nameStart);
-	numberEnd = buf.find(">",nameEnd + 1);
+		if(numberEnd >= buf.size()-1)
+			break;
+		nameStart = numberEnd + 1;
+		nameEnd = buf.find('\0',nameStart);
+		numberEnd = buf.find('\0',nameEnd + 1);
 	}
 	return dirList;
 }

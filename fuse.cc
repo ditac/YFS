@@ -333,7 +333,7 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	{
 		char *cpy = new char[itr->first.size()+1] ;
 		strcpy(cpy, itr->first.c_str());
-		cpy[itr->first.size()] = '\0';	
+		cpy[itr->first.size()] = '\0';
 		dirbuf_add(&b,cpy,itr->second);	
 	}
   reply_buf_limited(req, b.p, b.size, off, size);
