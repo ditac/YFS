@@ -38,7 +38,6 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
 	ScopedLock rwl(&extent_server_m_);
-	std::cout << "GETTING___" << fileList.size() << "\n";
 	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
 	fileListIter iter = fileList.find(id);
 	if(iter != fileList.end())
@@ -69,7 +68,6 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
-	std::cout << "Oh we were called";
 	ScopedLock rwl(&extent_server_m_);
 	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
 	fileListIter iter = fileList.find(id);

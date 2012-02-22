@@ -49,6 +49,7 @@ class yfs_client {
 	xxstatus create(inum pinum,const char *name, inum& inum);
 	int lookup(inum pinum,const char *name,inum& inum);
 	dirmap getDirList(inum inode);
+	int setSize(inum inum,int size);
 };
 
 #endif 

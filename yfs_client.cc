@@ -56,7 +56,6 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
-		printf("ok One of us");
     goto release;
   }
 
@@ -80,7 +79,6 @@ yfs_client::getdir(inum inum, dirinfo &din)
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
-		printf("ok One of us");
     goto release;
   }
   din.atime = a.atime;
@@ -98,7 +96,6 @@ yfs_client::read(inum inum,std::string &buf, off_t offset,size_t size)
   if (ec->get(inum, buf) != extent_protocol::OK) 
 	{
 		r = IOERR;
-		printf("ok One of us");
 	}
 	else
 	{
@@ -114,10 +111,23 @@ yfs_client::write(inum inum,const char *buf, off_t offset,size_t size)
 	std::string prevBuf;
 	std::string newBuf;
 	ec->get(inum,prevBuf);
-	newBuf = prevBuf.substr(0,offset) + std::string(buf,size);
+	if(offset + size > prevBuf.size())
+	{
+		if(offset > prevBuf.size())
+		{
+			newBuf = prevBuf + std::string(offset - prevBuf.size(),'\0') + std::string(buf,size);
+		}
+		else
+		{
+			newBuf = prevBuf.substr(0,offset) + std::string(buf,size);
+		}
+	}
+	else
+	{
+		newBuf = prevBuf.substr(0,offset) + std::string(buf,size) + prevBuf.substr(offset+size);
+	}
   if (ec->put(inum, newBuf) != extent_protocol::OK) 
 	{
-		printf("ok One of us");
 		r = IOERR;
 	}
 	return r;
@@ -126,7 +136,6 @@ yfs_client::write(inum inum,const char *buf, off_t offset,size_t size)
 yfs_client::xxstatus
 yfs_client::create(inum pinum,const char *name,inum& inum)
 {
-	printf("Entry");
 	xxstatus r = OK;	
 	int randInt = rand();
 	unsigned long long randInode = 0x00000000 | randInt;
@@ -159,7 +168,6 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 	std::string strName(name);
 	ec->get(pinum,buf);
 	size_t found = buf.find(strName);
-	//std::cout << "pinum__" << pinum << "__BUF___" << buf << "\n";
 	if(found == std::string::npos)
 	{
 		r = NOENT;
@@ -171,7 +179,6 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
 	}
-	std::cout << "found" << inum << r;
 	return r;
 }
 
@@ -189,7 +196,6 @@ yfs_client::getDirList(inum pinode)
 	{
 		std::string name = buf.substr(nameStart + 1,nameEnd - nameStart -1);
 		std::string strInum = buf.substr(nameEnd + 1, numberEnd - nameEnd - 1);
-		std::cout << name << "\ngrrrr\n";
 		inum inode= n2i(strInum);
 		dirList[name] = inode;
 	nameStart = buf.find("<",numberEnd);
@@ -199,3 +205,25 @@ yfs_client::getDirList(inum pinode)
 	return dirList;
 }
 
+
+int 
+yfs_client::setSize(inum inum,int size)
+{
+	int r = OK;	
+	std::string prevBuf;
+	std::string newBuf;
+	ec->get(inum,prevBuf);
+	if(size < prevBuf.size())
+	{
+		newBuf = prevBuf.substr(0,size);
+	}
+	else
+	{
+		newBuf = prevBuf + std::string(size - prevBuf.size(),'\0');
+	}
+	if (ec->put(inum, newBuf) != extent_protocol::OK) 
+	{
+		r = IOERR;
+	}
+	return r;
+}

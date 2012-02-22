@@ -111,10 +111,12 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set
   if (FUSE_SET_ATTR_SIZE & to_set) {
     printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
     struct stat st;
-    // You fill this in for Lab 2
-#if 0
+#if 1
     // Change the above line to "#if 1", and your code goes here
     // Note: fill st using getattr before fuse_reply_attr
+	unsigned long long inode = 0x00000000 | ino;
+		yfs->setSize(inode,attr->st_size);
+		getattr(ino,st);
     fuse_reply_attr(req, &st, 0);
 #else
     fuse_reply_err(req, ENOSYS);
@@ -139,7 +141,7 @@ void
 fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
       off_t off, struct fuse_file_info *fi)
 {
-#if 0
+#if 1
   std::string buf;
 	unsigned long long inode = 0x00000000 | ino;
 	
@@ -168,9 +170,9 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
   const char *buf, size_t size, off_t off,
   struct fuse_file_info *fi)
 {
-#if 0
+#if 1
 	unsigned long long inode = 0x00000000 | ino;
-	yfs->write(inode,buf,size,off);
+	yfs->write(inode,buf,off,size);
   fuse_reply_write(req, size);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -273,7 +275,6 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   else
 	{
     fuse_reply_err(req, ENOENT);
-		printf("This guy failed");
 	}
 }
 
@@ -328,7 +329,6 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	unsigned long long inode = 0x00000000 | ino;
 	std::map<std::string,unsigned long long> dirList = yfs->getDirList(inode);
 	std::map<std::string,unsigned long long>::iterator itr = dirList.begin();
-	std::cout << "DirListSize" << dirList.size();
 	for(;itr!=dirList.end();itr++)
 	{
 		char *cpy = new char[itr->first.size()+1] ;
