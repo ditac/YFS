@@ -143,7 +143,7 @@ yfs_client::create(inum pinum,const char *name,inum& inum)
 	std::string buf;
 	std::string strName(name);
 	ec->get(pinum,buf);
-	size_t found = buf.find(strName);
+	size_t found = buf.find('\0' + strName + '\0');
 	if(found != std::string::npos)
 	{
 		r = EXIST; 
@@ -153,6 +153,10 @@ yfs_client::create(inum pinum,const char *name,inum& inum)
 		std::string empty;
 		ec->put(inum,empty);
 		std::string newEntry = strName + '\0' + filename(inum) + '\0';
+		if(buf.empty())
+		{
+			newEntry =  '\0' + newEntry;
+		}
 		buf.append(newEntry);
 		ec->put(pinum,buf);
 	}
@@ -165,6 +169,7 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 	int r = OK;	
 	std::string buf;
 	std::string strName(name);
+	strName = '\0' + strName + '\0';
 	ec->get(pinum,buf);
 	size_t found = buf.find(strName);
 	if(found == std::string::npos)
@@ -173,7 +178,7 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 	}
 	else
 	{
-		size_t start = buf.find('\0',found) + 1;
+		size_t start = buf.find('\0',found+1) + 1;
 		size_t end = buf.find('\0',start);
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
@@ -188,7 +193,7 @@ yfs_client::getDirList(inum pinode)
 	std::string buf;
 	ec->get(pinode,buf);
 	
-	size_t nameStart = 0;
+	size_t nameStart = 1;
 	size_t nameEnd = buf.find('\0',nameStart);
 	size_t numberEnd = buf.find('\0',nameEnd + 1);
 	while(numberEnd != std::string::npos)
@@ -228,3 +233,4 @@ yfs_client::setSize(inum inum,int size)
 	}
 	return r;
 }
+
