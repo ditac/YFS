@@ -125,10 +125,12 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
   if (FUSE_SET_ATTR_SIZE & to_set) {
     printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
     struct stat st;
-    // You fill this in for Lab 2
-#if 0
+#if 1
     // Change the above line to "#if 1", and your code goes here
     // Note: fill st using getattr before fuse_reply_attr
+	unsigned long long inode = 0x00000000 | ino;
+		yfs->setSize(inode,attr->st_size);
+		getattr(ino,st);
     fuse_reply_attr(req, &st, 0);
 #else
     fuse_reply_err(req, ENOSYS);
@@ -154,10 +156,11 @@ void
 fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
                 off_t off, struct fuse_file_info *fi)
 {
-  // You fill this in for Lab 2
-#if 0
+#if 1
   std::string buf;
-  // Change the above "#if 0" to "#if 1", and your code goes here
+	unsigned long long inode = 0x00000000 | ino;
+	
+	yfs->read(inode,buf,off,size);
   fuse_reply_buf(req, buf.data(), buf.size());
 #else
   fuse_reply_err(req, ENOSYS);
@@ -184,9 +187,9 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
                  const char *buf, size_t size, off_t off,
                  struct fuse_file_info *fi)
 {
-  // You fill this in for Lab 2
-#if 0
-  // Change the above line to "#if 1", and your code goes here
+#if 1
+	unsigned long long inode = 0x00000000 | ino;
+	yfs->write(inode,buf,off,size);
   fuse_reply_write(req, size);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -219,8 +222,14 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   e->attr_timeout = 0.0;
   e->entry_timeout = 0.0;
   e->generation = 0;
-  // You fill this in for Lab 2
-  return yfs_client::NOENT;
+	unsigned long long pinode = 0x00000000 | parent;
+	unsigned long long inode = 0x00000000;
+	yfs_client::xxstatus retVal = yfs->create(pinode,name,inode);
+	e->ino = inode;
+	struct stat st;
+	getattr(inode,st);
+	e->attr = st;
+  return retVal;
 }
 
 void
@@ -269,12 +278,23 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   e.entry_timeout = 0.0;
   e.generation = 0;
   bool found = false;
-
-  // You fill this in for Lab 2
-  if (found)
+	unsigned long long pinode = 0x00000000 | parent;
+	unsigned long long inode = 0x00000000;
+  yfs_client::status ret;
+	ret = yfs->lookup(pinode,name,inode);
+	found = (ret == yfs_client::OK);
+	  if (found)
+	{
+		struct stat st;
+	getattr(inode,st);
+	e.ino = inode;
+	e.attr = st;
     fuse_reply_entry(req, &e);
+	}
   else
+	{
     fuse_reply_err(req, ENOENT);
+	}
 }
 
 
@@ -321,8 +341,6 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
   yfs_client::inum inum = ino; // req->in.h.nodeid;
   struct dirbuf b;
 
-  printf("fuseserver_readdir\n");
-
   if(!yfs->isdir(inum)){
     fuse_reply_err(req, ENOTDIR);
     return;
@@ -330,10 +348,16 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
   memset(&b, 0, sizeof(b));
 
-
-  // You fill this in for Lab 2
-
-
+	unsigned long long inode = 0x00000000 | ino;
+	std::map<std::string,unsigned long long> dirList = yfs->getDirList(inode);
+	std::map<std::string,unsigned long long>::iterator itr = dirList.begin();
+	for(;itr!=dirList.end();itr++)
+	{
+		char *cpy = new char[itr->first.size()+1] ;
+		strcpy(cpy, itr->first.c_str());
+		cpy[itr->first.size()] = '\0';
+		dirbuf_add(&b,cpy,itr->second);	
+	}
   reply_buf_limited(req, b.p, b.size, off, size);
   free(b.p);
 }
