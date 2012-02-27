@@ -126,8 +126,6 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
     struct stat st;
 #if 1
-    // Change the above line to "#if 1", and your code goes here
-    // Note: fill st using getattr before fuse_reply_attr
 	unsigned long long inode = 0x00000000 | ino;
 		yfs->setSize(inode,attr->st_size);
 		getattr(ino,st);
@@ -384,21 +382,40 @@ void
 fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
      mode_t mode)
 {
-  struct fuse_entry_param e;
-  // In yfs, timeouts are always set to 0.0, and generations are always set to 0
-  e.attr_timeout = 0.0;
-  e.entry_timeout = 0.0;
-  e.generation = 0;
-  // Suppress compiler warning of unused e.
-  (void) e;
+	struct fuse_entry_param e;
+	// In yfs, timeouts are always set to 0.0, and generations are always set to 0
+	e.attr_timeout = 0.0;
+	e.entry_timeout = 0.0;
+	e.generation = 0;
 
-  // You fill this in for Lab 3
-#if 0
-  fuse_reply_entry(req, &e);
+#if 1
+	int ret = yfs_client::OK;
+	unsigned long long pinode = 0x00000000 | parent;
+	unsigned long long inode ; 
+
+	if( (ret = yfs->mkdir(pinode, name,inode)) == yfs_client::OK ) 
+	{
+		e.ino = inode;
+		struct stat st;
+		getattr(inode,st);
+		e.attr = st;
+		fuse_reply_entry(req, &e);
+	} 
+	else 
+	{
+		if (ret == yfs_client::EXIST) {
+			fuse_reply_err(req, EEXIST);
+		}
+		else
+		{
+
+			fuse_reply_err(req, ENOENT);
+		}
+	}
 #else
-  fuse_reply_err(req, ENOSYS);
+		fuse_reply_err(req, ENOSYS);
 #endif
-}
+	}
 
 //
 // Remove the file named @name from directory @parent.
@@ -411,10 +428,17 @@ void
 fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 
-  // You fill this in for Lab 3
-  // Success:	fuse_reply_err(req, 0);
-  // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+  int ret = yfs_client::OK;
+	unsigned long long pinode = 0x00000000 | parent;
+
+	if( (ret = yfs->unlink(pinode, name)) == yfs_client::OK ) 
+	{
+		fuse_reply_err(req, 0);
+	} 
+	else 
+	{
+			fuse_reply_err(req, ENOENT);
+	}
 }
 
 void

@@ -14,6 +14,7 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
+	lc = new lock_client(lock_dst);
   srand ( time(NULL) );	
 }
 
@@ -112,13 +113,14 @@ yfs_client::read(inum inum,std::string &buf, off_t offset,size_t size)
 int
 yfs_client::write(inum inum,const char *buf, off_t offset,size_t size)
 {
+	lc->acquire(inum);
 	int r = OK;	
 	std::string prevBuf;
 	std::string newBuf;
 	ec->get(inum,prevBuf);
 	if(offset + size > prevBuf.size())
 	{
-		if(offset > prevBuf.size())
+		if((unsigned long)offset > prevBuf.size())
 		{
 			newBuf = prevBuf + std::string(offset - prevBuf.size(),'\0') + std::string(buf,size);
 		}
@@ -135,16 +137,19 @@ yfs_client::write(inum inum,const char *buf, off_t offset,size_t size)
 	{
 		r = IOERR;
 	}
+	lc->release(inum);
 	return r;
 }
 
 yfs_client::xxstatus
 yfs_client::create(inum pinum,const char *name,inum& inum)
 {
+	lc->acquire(pinum);
 	xxstatus r = OK;	
 	int randInt = rand();
 	unsigned long long randInode = 0x00000000 | randInt;
 	inum = 0x80000000 | randInode;
+	lc->acquire(inum);
 	std::string buf;
 	std::string strName(name);
 	ec->get(pinum,buf);
@@ -165,6 +170,8 @@ yfs_client::create(inum pinum,const char *name,inum& inum)
 		buf.append(newEntry);
 		ec->put(pinum,buf);
 	}
+	lc->release(inum);
+	lc->release(pinum);
 	return r;
 }
 
@@ -187,6 +194,8 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 		size_t end = buf.find('\0',start);
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
+		std::cout << "What happ here" << strInum;
+		std::cout << "\n \n BUFFFFFF" << buf;
 	}
 	return r;
 }
@@ -220,11 +229,12 @@ yfs_client::getDirList(inum pinode)
 int 
 yfs_client::setSize(inum inum,int size)
 {
+	lc->acquire(inum);
 	int r = OK;	
 	std::string prevBuf;
 	std::string newBuf;
 	ec->get(inum,prevBuf);
-	if(size < prevBuf.size())
+	if((unsigned int)size < prevBuf.size())
 	{
 		newBuf = prevBuf.substr(0,size);
 	}
@@ -236,6 +246,74 @@ yfs_client::setSize(inum inum,int size)
 	{
 		r = IOERR;
 	}
+	lc->release(inum);
+	return r;
+}
+
+int 
+yfs_client::mkdir(inum pinum, const char *name,inum &inum)
+{
+	lc->acquire(pinum);
+	int r = OK;	
+	int randInt = rand();
+	unsigned long long randInode = 0x00000000 | randInt;
+	inum = 0x01111111 & randInode;
+	lc->acquire(inum);
+	std::string buf;
+	std::string strName(name);
+	ec->get(pinum,buf);
+	size_t found = buf.find('\0' + strName + '\0');
+	if(found != std::string::npos)
+	{
+		r = EXIST; 
+	}
+	else
+	{
+		std::string empty;
+		ec->put(inum,empty);
+		std::string newEntry = strName + '\0' + filename(inum) + '\0';
+		if(buf.empty())
+		{
+			newEntry =  '\0' + newEntry;
+		}
+		buf.append(newEntry);
+		ec->put(pinum,buf);
+	}
+	lc->release(inum);
+	lc->release(pinum);
+	return r;
+}
+
+int 
+yfs_client::unlink(inum pinum, const char *name)
+{
+	lc->acquire(pinum);
+	int r = OK;	
+	std::string buf;
+	std::string strName(name);
+	strName = '\0' + strName + '\0';
+	ec->get(pinum,buf);
+	size_t found = buf.find(strName);
+	if(found == std::string::npos)
+	{
+		r = NOENT;
+	}
+	else
+	{
+		size_t start = buf.find('\0',found+1) + 1;
+		size_t end = buf.find('\0',start);
+		std::string strInum = buf.substr(start, end - start);
+		inum cinum = n2i(strInum);
+		lc->acquire(cinum);
+		if(isfile(cinum))
+		{
+			buf = buf.substr(0,found) + buf.substr(end);
+  		ec->put(pinum, buf);  
+			ec->remove(cinum);
+		}
+		lc->release(cinum);
+	}
+	lc->release(pinum);
 	return r;
 }
 

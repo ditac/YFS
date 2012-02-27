@@ -11,6 +11,7 @@
 
 class yfs_client {
   extent_client *ec;
+	lock_client *lc;
  public:
 
   typedef unsigned long long inum;
@@ -52,6 +53,9 @@ class yfs_client {
 	int lookup(inum pinum,const char *name,inum& inum);
 	dirmap getDirList(inum inode);
 	int setSize(inum inum,int size);
+	int mkdir(inum pinum, const char *name,inum &inum);
+	int unlink(inum pinum, const char *name);
+
 };
 
 #endif 
