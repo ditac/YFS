@@ -16,6 +16,25 @@ class extent_server {
   int get(extent_protocol::extentid_t id, std::string &);
   int getattr(extent_protocol::extentid_t id, extent_protocol::attr &);
   int remove(extent_protocol::extentid_t id, int &);
+
+ private:
+	pthread_mutex_t extent_server_m_; // protect reply window et al
+	struct fileVal{
+		fileVal()
+		{
+
+		}
+		fileVal(std::string inBuf, extent_protocol::attr inAttr)
+		{
+			buf = inBuf;
+			attr = inAttr;
+		} 
+		
+		std::string buf;
+		extent_protocol::attr attr;
+	};
+	std::map<extent_protocol::extentid_t,fileVal> fileList;
+	typedef std::map<extent_protocol::extentid_t,fileVal>::iterator fileListIter;
 };
 
 #endif 

@@ -11,11 +11,13 @@
 
 class yfs_client {
   extent_client *ec;
+	lock_client *lc;
  public:
 
   typedef unsigned long long inum;
   enum xxstatus { OK, RPCERR, NOENT, IOERR, EXIST };
   typedef int status;
+	typedef std::map<std::string,inum> dirmap;
 
   struct fileinfo {
     unsigned long long size;
@@ -45,6 +47,15 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+	int read(inum inum,std::string &buf, off_t offset,size_t size);
+	int write(inum inum,const char *buf, off_t offset,size_t size);
+	xxstatus create(inum pinum,const char *name, inum& inum);
+	int lookup(inum pinum,const char *name,inum& inum);
+	dirmap getDirList(inum inode);
+	int setSize(inum inum,int size);
+	int mkdir(inum pinum, const char *name,inum &inum);
+	int unlink(inum pinum, const char *name);
+
 };
 
 #endif 
