@@ -13,6 +13,7 @@ pthread_cond_t lockId_cv;
 lock_server::lock_server():
 	nacquire (0)
 {
+	std::cout << "We are being created";
 }
 
 	lock_protocol::status

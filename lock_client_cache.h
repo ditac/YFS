@@ -18,15 +18,29 @@ class lock_release_user {
   virtual void dorelease(lock_protocol::lockid_t) = 0;
   virtual ~lock_release_user() {};
 };
+class lock_client_Object;
 
 class lock_client_cache : public lock_client {
+public:
+enum lock_client_state
+	{
+		none,
+		free,
+		locked,
+		acquiring,
+		releasing
+	};
+
+typedef std::map<lock_protocol::lockid_t,lock_client_state>::iterator lockMapIter;
  private:
   class lock_release_user *lu;
   int rlock_port;
   std::string hostname;
   std::string id;
+	
+	std::map<lock_protocol::lockid_t,lock_client_state> lockMap;
  public:
-  static int last_port;
+	  static int last_port;
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache() {};
   lock_protocol::status acquire(lock_protocol::lockid_t);
@@ -37,5 +51,16 @@ class lock_client_cache : public lock_client {
                                        int &);
 };
 
+/*
+class lock_client_Object
+{
+	public:
+		lock_client_Object()
+		{
+			state = lock_client_cache::none;	
+		}
+	lock_client_cache::lock_client_state state;
+};
+*/
 
 #endif
