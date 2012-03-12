@@ -24,6 +24,7 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	pthread_mutex_lock(&glockServerMutex);
   lock_protocol::status ret = lock_protocol::OK;
 	std::map<lock_protocol::lockid_t,lock_Data *>::iterator iter =  locks.find(lid);
+	//std::cout << "\n\nAcquire called____" << lid << "by___" << id;
 	if(iter == locks.end())
 	{
 		lock_Data* lockData = new lock_Data();
@@ -37,10 +38,14 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 		lock_Data* lockData = iter->second;
 		if(lockData->state == lock_Data::locked)
 		{
+			//std::cout << "\n\nWe tried to revoke    " << lid;
+			lockData->state = lock_Data::revoking;
 			pthread_t thread;		
 			pthread_create(&thread,NULL,retryRequest,(void *) iter->second);
-			lockData->state = lock_Data::revoking;
+			lockData->waitingClientsList.push_back(id);
 			ret = lock_protocol::RETRY;
+			std::cout << "\nRetry sent to  " <<id <<"for " << lid;
+			std::cout << "\nLock held by " << lockData->cltId<<"for " << lid;
 		}
 		else if(lockData->state == lock_Data::free)
 		{
@@ -50,6 +55,7 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 		}
 		else
 		{
+			ret = lock_protocol::RETRY;
 			lockData->waitingClientsList.push_back(id);
 		}
 		/*
@@ -65,6 +71,7 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 
 	}
 	pthread_mutex_unlock(&glockServerMutex);
+	//std::cout << "\n\nAcquired " << lid << "by___" << id;
   return ret;
 }
 
@@ -80,14 +87,29 @@ lock_server_cache::retryRequest(void* cltId)
   }
 	int r;
   cl->call(rlock_protocol::revoke,lockData->id ,r);
+	free(cl);	
+	pthread_mutex_lock(&glockServerMutex);
+	lockData->state = lock_Data::locked;
+	pthread_mutex_unlock(&glockServerMutex);
 	while(lockData->waitingClientsList.size() > 0)
 	{
 		pthread_mutex_lock(&glockServerMutex);
-		lockData->state = lock_Data::locked;
-
+		std::string cltStr = lockData->waitingClientsList.front();
+		lockData->waitingClientsList.pop_front();
+		lockData->cltId = cltStr;
 		pthread_mutex_unlock(&glockServerMutex);
+  	make_sockaddr(cltStr.c_str(), &dstsock);
+		cl = new rpcc(dstsock);
+		if (cl->bind() < 0) {
+    printf("lock_server: call bind\n");
+  	}
+		//std::cout << "\nWe called retry on" << cltStr;
+  	cl->call(rlock_protocol::retry,lockData->id ,r);
+		free(cl);
 	}
-	free(cl);	
+	pthread_mutex_lock(&glockServerMutex);
+	lockData->state = lock_Data::free;
+	pthread_mutex_unlock(&glockServerMutex);
 	pthread_exit(NULL);
 }
 
@@ -95,6 +117,7 @@ int
 lock_server_cache::release(lock_protocol::lockid_t lid, std::string id, 
          int &r)
 {
+	//std::cout << "Never called \n\n";
 	pthread_mutex_lock(&glockServerMutex);
   lock_protocol::status ret = lock_protocol::OK;
 	lock_Data* lockData = locks[lid];
