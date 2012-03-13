@@ -28,6 +28,7 @@ enum lock_client_state
 		free,
 		locked,
 		acquiring,
+		waitingForRetry,
 		releasing
 	};
 

@@ -15,7 +15,8 @@ class lock_Data
 	{
 		free,
 		locked,
-		revoking
+		revoking,
+		retrying
 	};
 	lock_protocol::lockid_t id;
 	lock_state state;
