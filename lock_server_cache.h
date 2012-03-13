@@ -1,3 +1,4 @@
+#pragma once
 #ifndef lock_server_cache_h
 #define lock_server_cache_h
 
@@ -8,20 +9,18 @@
 #include "rpc.h"
 #include "lock_server.h"
 
-class lock_Data
+class lock
 {
 	public:
 	enum lock_state
 	{
 		free,
-		locked,
-		revoking,
-		retrying
+		locked
 	};
 	lock_protocol::lockid_t id;
 	lock_state state;
-	std::string cltId;
-	std::list<std::string> waitingClientsList;
+	std::string ownerStr;
+	std::list<std::string> waitList;
 };
 
 class lock_server_cache 
@@ -29,13 +28,20 @@ class lock_server_cache
  private:
   int nacquire;
  public:
-	std::map<lock_protocol::lockid_t,lock_Data *> locks;
+	std::map<lock_protocol::lockid_t,lock *> locks;
   lock_server_cache();
   lock_protocol::status stat(lock_protocol::lockid_t, int &);
   int acquire(lock_protocol::lockid_t, std::string id, int &);
   int release(lock_protocol::lockid_t, std::string id, int &);
-	static void* retryRequest(void* cltId);
 	void dumpLocks();
 };
+
+namespace lock_server_utility
+{
+	void revoke(lock *l);
+	void retry(lock *l);
+	void* revokeThread(void *);
+	void* retryThread(void *);
+}
 
 #endif

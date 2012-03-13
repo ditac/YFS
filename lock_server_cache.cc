@@ -9,18 +9,114 @@
 #include "handle.h"
 #include "tprintf.h"
 
+namespace lock_server_utility
+{
+	std::list<lock *> retryList;
+	std::list<lock *> revokeList;
+}
 
+//------------MUTEXES-----------
 pthread_mutex_t glockServerMutex;
 pthread_cond_t glockServer_cv;
+pthread_cond_t grevokeThread_cv;
+pthread_cond_t gretryThread_cv;
 
 lock_server_cache::lock_server_cache()
 {
+	pthread_t revoke_t;		
+	pthread_create(&revoke_t,NULL,lock_server_utility::revokeThread,NULL);
+
+	pthread_t retry_t;		
+	pthread_create(&retry_t,NULL,lock_server_utility::retryThread,NULL);
+}
+
+void* 
+lock_server_utility::revokeThread(void *)
+{
+	pthread_mutex_lock(&glockServerMutex);
+	while(1)
+	{
+		while(!revokeList.empty())
+		{
+			lock *l = revokeList.front();
+			sockaddr_in dstsock;
+			make_sockaddr(l->ownerStr.c_str(), &dstsock);
+			rpcc* cl = new rpcc(dstsock);
+			if (cl->bind() < 0) {
+				printf("lock_server: call bind\n");
+			}
+			int r;
+			cl->call(rlock_protocol::revoke,l->id ,r);
+			delete cl;
+			retry(l);
+			revokeList.pop_front();
+		}
+		pthread_cond_wait(&grevokeThread_cv, &glockServerMutex);
+	}
+	pthread_mutex_unlock(&glockServerMutex);
+	pthread_exit(NULL);	
 }
 
 
-int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id, 
-                               int &)
+void* 
+lock_server_utility::retryThread(void *)
 {
+	/*
+	pthread_mutex_lock(&glockServerMutex);
+	while(1)
+	{
+		while(!retryList.empty())
+		{
+			lock *l = retryList.front();
+			sockaddr_in dstsock;
+			make_sockaddr(l->ownerStr.c_str(), &dstsock);
+			rpcc* cl = new rpcc(dstsock);
+			if (cl->bind() < 0) {
+				printf("lock_server: call bind\n");
+			}
+			int r;
+			cl->call(rlock_protocol::revoke,lockData->id ,r);
+			free(cl);	
+			retryList.pop_front();
+		}
+		pthread_cond_wait(&gretryThread_cv, &glockServerMutex);
+	}
+	pthread_mutex_unlock(&glockServerMutex);
+	*/
+	pthread_exit(NULL);	
+}
+
+int 
+lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id, 
+                               int &r)
+{
+	pthread_mutex_lock(&glockServerMutex);
+	tprintf("acquire\n");
+  lock_protocol::status ret = lock_protocol::OK;
+	
+	if(locks[lid] == NULL)
+	{
+		locks[lid] = new lock();
+	}
+	switch(locks[lid]->state)
+	{
+		tprintf("FAULT\n");
+		case lock::locked:
+		lock_server_utility::revoke(locks[lid]);
+		break;
+		case lock::free:
+		//Grant Lock
+			locks[lid]->state = lock::locked;
+			locks[lid]->ownerStr = id;
+			locks[lid]->id = lid;
+		break;	
+	}
+  r = nacquire;
+	pthread_mutex_unlock(&glockServerMutex);
+  return ret;
+
+
+	/*
 	pthread_mutex_lock(&glockServerMutex);
   lock_protocol::status ret = lock_protocol::OK;
 	std::map<lock_protocol::lockid_t,lock_Data *>::iterator iter =  locks.find(lid);
@@ -77,8 +173,23 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	}
 //dumpLocks();
   return ret;
+	*/
 }
 
+void
+lock_server_utility::revoke(lock *l)
+{
+	revokeList.push_back(l);	
+	pthread_cond_signal(&grevokeThread_cv);
+}
+
+void
+lock_server_utility::retry(lock *l)
+{
+	lock_server_utility::retryList.push_back(l);	
+	pthread_cond_signal(&gretryThread_cv);
+}
+/*
 void* 
 lock_server_cache::retryRequest(void* cltId)
 {
@@ -119,11 +230,17 @@ lock_server_cache::retryRequest(void* cltId)
 	pthread_mutex_unlock(&glockServerMutex);
 	pthread_exit(NULL);
 }
+*/
 
 int 			
 lock_server_cache::release(lock_protocol::lockid_t lid, std::string id, 
          int &r)
-{
+{ 
+	tprintf("release\n");
+  r = nacquire;
+  return lock_protocol::OK;
+
+	/*
 	//std::cout << "Never called \n\n";
 	pthread_mutex_lock(&glockServerMutex);
   lock_protocol::status ret = lock_protocol::OK;
@@ -131,6 +248,7 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
 	lockData->state = lock_Data::free;
 	pthread_mutex_unlock(&glockServerMutex);
   return ret;
+	*/
 }
 
 lock_protocol::status
@@ -144,10 +262,11 @@ lock_server_cache::stat(lock_protocol::lockid_t lid, int &r)
 void 
 lock_server_cache::dumpLocks()
 {
-	std::map<lock_protocol::lockid_t,lock_Data *>::iterator iter =  locks.begin();
+	std::map<lock_protocol::lockid_t,lock *>::iterator iter =  locks.begin();
 	std::cout << "\n\nDumping Locks \n\n";
 	for(;iter != locks.end();iter++)
 	{
-		std::cout << "Lock number+++" << iter->first << "held by" << iter->second->cltId;
+		std::cout << "Lock number+++" << iter->first << "held by" << iter->second->ownerStr;
 	}
 }
+
