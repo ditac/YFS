@@ -51,7 +51,10 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 			}
 			else if(ret == lock_protocol::RETRY)
 			{
+				tprintf("\nRetry arrived\n");
 				lockMap[lid] = waitingForRetry;
+				//Incase retry has arrived and is waiting
+				pthread_cond_broadcast(&gClient_cv);
 			}
 		}
 		pthread_cond_wait(&gClient_cv, &globalClientMutex);
@@ -88,10 +91,10 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	std::cout << "Just another revoke __" << lockMap[lid] << "\n";
   int ret = rlock_protocol::OK;
 	pthread_mutex_lock(&globalClientMutex);
-	if(lockMap[lid] != locked && lockMap[lid] != free)
+	while(lockMap[lid] != locked && lockMap[lid] != free)
 	{
 		std::cout << "REVOKE WHEN LOCK IS NOT WITH US client+++" << id <<"For Lock____"<< lid;
-		//pthread_cond_wait(&gClient_cv, &globalClientMutex);
+		pthread_cond_wait(&gClient_cv, &globalClientMutex);
 	}
 	//std::cout << "\n\nRevoke  client++++" << id <<"  " << lockMap[lid];
 	if(lockMap[lid] == locked)
@@ -115,9 +118,9 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
 {
   int ret = rlock_protocol::OK;
 	pthread_mutex_lock(&globalClientMutex);
-	if(lockMap[lid] != waitingForRetry)
+	while(lockMap[lid] != waitingForRetry)
 	{
-		std::cout << "RETRY WHEN LOCK IS WITH US +++" << lockMap[lid];
+		std::cout << "RETRY WHEN LOCK IS WITH US +++" << lid;
 		pthread_cond_wait(&gClient_cv, &globalClientMutex);
 	}
 	lockMap[lid] = free;
