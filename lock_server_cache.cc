@@ -15,6 +15,7 @@ pthread_cond_t glockServer_cv;
 
 lock_server_cache::lock_server_cache()
 {
+	VERIFY(pthread_mutex_init(&glockServerMutex, 0) == 0);
 }
 
 

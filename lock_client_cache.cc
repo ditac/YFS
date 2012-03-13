@@ -18,6 +18,7 @@ lock_client_cache::lock_client_cache(std::string xdst,
 				     class lock_release_user *_lu)
   : lock_client(xdst), lu(_lu)
 {
+	VERIFY(pthread_mutex_init(&globalClientMutex, 0) == 0);
   rpcs *rlsrpc = new rpcs(0);
   rlsrpc->reg(rlock_protocol::revoke, this, &lock_client_cache::revoke_handler);
   rlsrpc->reg(rlock_protocol::retry, this, &lock_client_cache::retry_handler);
