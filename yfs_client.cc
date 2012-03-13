@@ -194,8 +194,6 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 		size_t end = buf.find('\0',start);
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
-		std::cout << "What happ here" << strInum;
-		std::cout << "\n \n BUFFFFFF" << buf;
 	}
 	return r;
 }

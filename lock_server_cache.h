@@ -15,7 +15,8 @@ class lock_Data
 	{
 		free,
 		locked,
-		revoking
+		revoking,
+		retrying
 	};
 	lock_protocol::lockid_t id;
 	lock_state state;
@@ -34,6 +35,7 @@ class lock_server_cache
   int acquire(lock_protocol::lockid_t, std::string id, int &);
   int release(lock_protocol::lockid_t, std::string id, int &);
 	static void* retryRequest(void* cltId);
+	void dumpLocks();
 };
 
 #endif
