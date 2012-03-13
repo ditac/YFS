@@ -100,7 +100,7 @@ lock_server_cache::retryRequest(void* cltId)
   }
 	int r;
   cl->call(rlock_protocol::revoke,lockData->id ,r);
-	free(cl);	
+	delete cl;	
 	pthread_mutex_lock(&glockServerMutex);
 	lockData->state = lock_Data::retrying;
 	pthread_mutex_unlock(&glockServerMutex);
@@ -118,7 +118,7 @@ lock_server_cache::retryRequest(void* cltId)
   	}
 		//std::cout << "\nWe called retry on" << cltStr;
   	cl->call(rlock_protocol::retry,lockData->id ,r);
-		free(cl);
+		delete cl;
 	}
 	pthread_mutex_lock(&glockServerMutex);
 	lockData->state = lock_Data::free;
