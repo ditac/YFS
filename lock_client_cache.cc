@@ -13,6 +13,7 @@ int lock_client_cache::last_port = 0;
 
 pthread_mutex_t globalClientMutex;
 pthread_cond_t gClient_cv;
+pthread_cond_t gReleaseThread_cv;
 
 lock_client_cache::lock_client_cache(std::string xdst, 
 				     class lock_release_user *_lu)
@@ -29,84 +30,132 @@ lock_client_cache::lock_client_cache(std::string xdst,
   id = host.str();
 }
 
+
+void* 
+lock_client_utility::releaseThread(void *in)
+{
+	lock_client_utility::releaseData* data = (lock_client_utility::releaseData *)in;
+	rpcc *cl = data->cl;
+	std::string id = data->cltId;
+	lock_protocol::lockid_t lid = data->lid;
+	tprintf("release RPC%s for lock %d state \n",id.c_str(),lid);
+	int r;
+	cl->call(lock_protocol::release,lid,id, r);
+	pthread_mutex_lock(&globalClientMutex);
+	(*(data->lockMap))[lid] = lock_client_cache::none;
+	pthread_cond_broadcast(&gClient_cv);
+	pthread_mutex_unlock(&globalClientMutex);
+	pthread_exit(NULL);	
+}
+
 lock_protocol::status
 lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
 	pthread_mutex_lock(&globalClientMutex);
-	std::cout << "Acquire"<<lid<<" Called by" << id << "\n";
-  lock_protocol::status ret = lock_protocol::OK;
+	tprintf("acquire %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	int r;
-	while(lockMap[lid] != free)
+  lock_protocol::status ret = lock_protocol::OK;
+	do
 	{
-		if(lockMap[lid] == none)
+		ret = lock_protocol::OK;
+		while(lockMap[lid] == locked || lockMap[lid] == acquiring)
 		{
-			lockMap[lid] = acquiring;
-			pthread_mutex_unlock(&globalClientMutex);
-			ret = cl->call(lock_protocol::acquire, lid,id, r);
-			pthread_mutex_lock(&globalClientMutex);
-			if(ret == lock_protocol::OK)
-			{
-				lockMap[lid] = free;
-				break;
-			}
-			else if(ret == lock_protocol::RETRY)
-			{
-				lockMap[lid] = waitingForRetry;
-			}
+			pthread_cond_wait(&gClient_cv, &globalClientMutex);
+			tprintf("Woke Up %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 		}
-		pthread_cond_wait(&gClient_cv, &globalClientMutex);
-	}
-	if(lockMap[lid] == free)
+		tprintf("Got out\n");
+		switch(lockMap[lid])
+		{
+			case free:
+				//We just assign lock
+				break;
+			case none:
+				lockMap[lid] = acquiring;
+				pthread_mutex_unlock(&globalClientMutex);
+				ret = cl->call(lock_protocol::acquire, lid,id, r);
+				pthread_mutex_lock(&globalClientMutex);
+				break;
+			default:
+				assert(false);
+		}
+		if(ret == lock_protocol::RETRY)
+		{
+			//Error REVOKE
+			if(lockMap[lid] == free)
+				assert(false);
+			lockMap[lid] = none;
+			if(lockMap[lid] != none)
+				pthread_cond_wait(&gClient_cv, &globalClientMutex);
+		}
+	}while(ret == lock_protocol::RETRY);
+	if(lockMap[lid] != releasing)
 	{
-		//Got the lock.
 		lockMap[lid] = locked;
 	}
-
-	pthread_cond_broadcast(&gClient_cv);
+	tprintf("granted %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	pthread_mutex_unlock(&globalClientMutex);
-	//std::cout << "\nWe granted here" << lid;
-	std::cout << "Acquired____" << lid <<" by" << id << "\n";
   return lock_protocol::OK;
 }
 
 lock_protocol::status
 lock_client_cache::release(lock_protocol::lockid_t lid) 
 { 
-	pthread_mutex_lock(&globalClientMutex); 
+	pthread_mutex_lock(&globalClientMutex);
+	tprintf("release %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	lock_protocol::status ret = lock_protocol::OK;
-	lockMap[lid] = free;
+	int r;
+	switch(lockMap[lid])
+	{
+		case none:
+		case free:
+		case acquiring:
+			assert(false);
+			break;
+		case locked:
+			lockMap[lid] = free;
+			break;
+		case releasing:
+			pthread_mutex_unlock(&globalClientMutex);
+			ret = cl->call(lock_protocol::release, lid,id, r);
+			pthread_mutex_lock(&globalClientMutex);
+			lockMap[lid] = none;
+			break;
+	}
 	pthread_cond_broadcast(&gClient_cv);
 	pthread_mutex_unlock(&globalClientMutex);
-	std::cout << "Setting Free" << lid << "by  "<< id << "\n";
 	return ret;
 }
 
 rlock_protocol::status
 lock_client_cache::revoke_handler(lock_protocol::lockid_t lid, 
-                                  int &)
+                                  int &r)
 {
-	std::cout << "Just another revoke __" << lockMap[lid] << "\n";
-  int ret = rlock_protocol::OK;
 	pthread_mutex_lock(&globalClientMutex);
-	if(lockMap[lid] != locked && lockMap[lid] != free)
+	tprintf("revoke %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
+  int ret = rlock_protocol::OK;
+	switch(lockMap[lid])
 	{
-		std::cout << "REVOKE WHEN LOCK IS NOT WITH US client+++" << id <<"For Lock____"<< lid;
-		//pthread_cond_wait(&gClient_cv, &globalClientMutex);
+		case none:
+			//We have already released. Fix server.
+			//assert(false);
+			break;
+		case releasing:
+			//More people want the lock.. Release fast
+			break;
+		case free:
+			{
+				lockMap[lid] = none;
+				pthread_t release_t;		
+				lock_client_utility::releaseData *data = new lock_client_utility::releaseData(lid,id,cl,&lockMap);
+				pthread_create(&release_t,NULL,lock_client_utility::releaseThread,(void *)data);
+			}
+			break;
+		case acquiring:
+		case locked:
+			lockMap[lid] = releasing;
+			break;
 	}
-	//std::cout << "\n\nRevoke  client++++" << id <<"  " << lockMap[lid];
-	if(lockMap[lid] == locked || 
-			lockMap[lid] == free)
-	{
-		lockMap[lid] = releasing;
-	}
-	while(lockMap[lid] != free)
-	{	
-		//std::cout << "Revoke waiting for free__" << lid << "\n";
-		pthread_cond_wait(&gClient_cv, &globalClientMutex);
-	}
-	lockMap[lid] = none;
 	pthread_mutex_unlock(&globalClientMutex);
-	std::cout << "Revoked success client\n";
   return ret;
 }
 
@@ -114,26 +163,25 @@ rlock_protocol::status
 lock_client_cache::retry_handler(lock_protocol::lockid_t lid, 
                                  int &)
 {
-  int ret = rlock_protocol::OK;
 	pthread_mutex_lock(&globalClientMutex);
-	if(lockMap[lid] != waitingForRetry)
+	tprintf("retry %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
+	int ret = rlock_protocol::OK;
+	switch(lockMap[lid])
 	{
-		std::cout << "RETRY WHEN LOCK IS WITH US +++" << lockMap[lid];
-		pthread_cond_wait(&gClient_cv, &globalClientMutex);
+		case none:
+			//TODO Fix this
+			break;
+		case releasing:
+		case free:
+		case locked:
+			//TODO Fix this
+			tprintf("retry %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
+			break;
+		case acquiring:
+			lockMap[lid] = none;
+			break;
 	}
-	lockMap[lid] = free;
 	pthread_cond_broadcast(&gClient_cv);
-	//std::cout << "Retry  waiting for free__" << lid << "\n";
-	pthread_cond_wait(&gClient_cv, &globalClientMutex);
-	while(lockMap[lid] != free)
-	{
-		pthread_cond_wait(&gClient_cv, &globalClientMutex);
-	}
-	if(lockMap[lid] == acquiring || lockMap[lid] == releasing)
-	{
-		std::cout << "\n\nWTF\n\n";
-	}
-	lockMap[lid] = none;
 	pthread_mutex_unlock(&globalClientMutex);
   return ret;
 }

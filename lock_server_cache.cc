@@ -11,8 +11,9 @@
 
 namespace lock_server_utility
 {
-	std::list<lock *> retryList;
+	std::map<lock_protocol::lockid_t, lock *> retryList;
 	std::list<lock *> revokeList;
+	bool released;
 }
 
 //------------MUTEXES-----------
@@ -46,10 +47,12 @@ lock_server_utility::revokeThread(void *)
 				printf("lock_server: call bind\n");
 			}
 			int r;
-			cl->call(rlock_protocol::revoke,l->id ,r);
-			delete cl;
-			retry(l);
 			revokeList.pop_front();
+			pthread_mutex_unlock(&glockServerMutex);
+			tprintf("revoke %s\n",l->ownerStr.c_str());
+			cl->call(rlock_protocol::revoke,l->id ,r);
+			pthread_mutex_lock(&glockServerMutex);
+			delete cl;
 		}
 		pthread_cond_wait(&grevokeThread_cv, &glockServerMutex);
 	}
@@ -61,28 +64,49 @@ lock_server_utility::revokeThread(void *)
 void* 
 lock_server_utility::retryThread(void *)
 {
-	/*
 	pthread_mutex_lock(&glockServerMutex);
 	while(1)
 	{
-		while(!retryList.empty())
+		released = true;
+		while(released)
 		{
-			lock *l = retryList.front();
-			sockaddr_in dstsock;
-			make_sockaddr(l->ownerStr.c_str(), &dstsock);
-			rpcc* cl = new rpcc(dstsock);
-			if (cl->bind() < 0) {
-				printf("lock_server: call bind\n");
+			std::list<std::pair<std::string,lock_protocol::lockid_t> > cltList;
+			std::map<lock_protocol::lockid_t,lock *>::iterator iter = retryList.begin();
+			released = false;
+			for(;iter!=retryList.end();iter++)
+			{
+				lock *l = iter->second;
+				std::set<std::string>::iterator waitListIter = l->waitList.begin();
+				for(;waitListIter!=l->waitList.end();waitListIter++)
+				{
+					std::string cltStr = *waitListIter;
+					cltList.push_back(std::pair<std::string,lock_protocol::lockid_t>(cltStr,iter->first));
+					l->waitList.erase(waitListIter);
+				}
+				retryList.erase(iter);
 			}
-			int r;
-			cl->call(rlock_protocol::revoke,lockData->id ,r);
-			free(cl);	
-			retryList.pop_front();
+			tprintf("retry %d\n",cltList.size());
+			pthread_mutex_unlock(&glockServerMutex);
+			std::list<std::pair<std::string,lock_protocol::lockid_t> >::iterator cltIter = cltList.begin();
+			for(;cltIter!= cltList.end();cltIter++)
+			{
+				sockaddr_in dstsock;
+				make_sockaddr((*cltIter).first.c_str(), &dstsock);
+				rpcc* cl = new rpcc(dstsock);
+				if (cl->bind() < 0) {
+					printf("lock_server: call bind\n");
+				}
+				int r;
+				cl->call(rlock_protocol::retry,(*cltIter).second ,r);
+				delete cl;
+			}
+			pthread_mutex_lock(&glockServerMutex);
 		}
+
+		tprintf("exit retry \n");
 		pthread_cond_wait(&gretryThread_cv, &glockServerMutex);
 	}
 	pthread_mutex_unlock(&glockServerMutex);
-	*/
 	pthread_exit(NULL);	
 }
 
@@ -91,7 +115,7 @@ lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
                                int &r)
 {
 	pthread_mutex_lock(&glockServerMutex);
-	tprintf("acquire\n");
+	tprintf("acquire %s for lock %d\n",id.c_str(),lid);
   lock_protocol::status ret = lock_protocol::OK;
 	
 	if(locks[lid] == NULL)
@@ -100,80 +124,23 @@ lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	}
 	switch(locks[lid]->state)
 	{
-		tprintf("FAULT\n");
 		case lock::locked:
 		lock_server_utility::revoke(locks[lid]);
+		locks[lid]->waitList.insert(id);
+		lock_server_utility::retry(locks[lid]);
+		ret = lock_protocol::RETRY;
 		break;
 		case lock::free:
 		//Grant Lock
 			locks[lid]->state = lock::locked;
 			locks[lid]->ownerStr = id;
 			locks[lid]->id = lid;
+			tprintf("granted %s for lock %d\n",id.c_str(),lid);
 		break;	
 	}
   r = nacquire;
 	pthread_mutex_unlock(&glockServerMutex);
   return ret;
-
-
-	/*
-	pthread_mutex_lock(&glockServerMutex);
-  lock_protocol::status ret = lock_protocol::OK;
-	std::map<lock_protocol::lockid_t,lock_Data *>::iterator iter =  locks.find(lid);
-
-	if(iter == locks.end())
-		std::cout << "\nAcquire called by "<< id << " FOR Lock ___" << lid << "Currently Held By Nobody" <<"\n";
-	else
-		std::cout << "\nAcquire called by "<< id << " FOR Lock ___" << lid << "Currently Held By _____" << iter->second->cltId << "\n";
-	if(iter == locks.end())
-	{
-		lock_Data* lockData = new lock_Data();
-		lockData->id = lid;
-		lockData->state = lock_Data::locked;
-		lockData->cltId = id;
-		locks.insert(std::pair<lock_protocol::lockid_t,lock_Data*>(lid,lockData));
-	}
-	else
-	{
-		
-		lock_Data* lockData = iter->second;
-		if(lockData->state == lock_Data::locked && lockData->cltId == id)
-		{
-			std::cout << "\n\n\nHOHOHO \n\n\n";
-		}
-		if(lockData->state == lock_Data::locked)
-		{
-			//std::cout << "\n\nWe tried to revoke    " << lid;
-			lockData->state = lock_Data::revoking;
-			//std::cout << "\nRevoke  "<< lockData->cltId << " FOR Lock ___" << lockData->id << "For Client___" << id <<"\n";
-			pthread_t thread;		
-			pthread_create(&thread,NULL,retryRequest,(void *) iter->second);
-			lockData->waitingClientsList.push_back(id);
-			ret = lock_protocol::RETRY;
-			//std::cout << "\nRetry sent to  " <<id <<"for " << lid;
-			//std::cout << "\nLock held by " << lockData->cltId<<"for " << lid;
-		}
-		else if(lockData->state == lock_Data::free)
-		{
-			lockData->id = lid;
-			lockData->state = lock_Data::locked;
-			lockData->cltId = id;
-		}
-		else
-		{
-			ret = lock_protocol::RETRY;
-			lockData->waitingClientsList.push_back(id);
-		}
-	}
-	pthread_mutex_unlock(&glockServerMutex);
-	//std::cout << "\n\nAcquired " << lid << "by___" << id;
-	if(ret == lock_protocol::OK)
-	{
-		//std::cout << "\nLock " << lid << "granted to___" << id;
-	}
-//dumpLocks();
-  return ret;
-	*/
 }
 
 void
@@ -186,69 +153,23 @@ lock_server_utility::revoke(lock *l)
 void
 lock_server_utility::retry(lock *l)
 {
-	lock_server_utility::retryList.push_back(l);	
-	pthread_cond_signal(&gretryThread_cv);
+	lock_server_utility::retryList[l->id] = l;	
 }
-/*
-void* 
-lock_server_cache::retryRequest(void* cltId)
-{
-	sockaddr_in dstsock;
-	//std::cout << "\nRetry Revoke entry" ;
-	lock_Data* lockData = (lock_Data*) cltId;
-  make_sockaddr(lockData->cltId.c_str(), &dstsock);
-  rpcc* cl = new rpcc(dstsock);
-  if (cl->bind() < 0) {
-    printf("lock_server: call bind\n");
-  }
-	int r;
-  cl->call(rlock_protocol::revoke,lockData->id ,r);
-	free(cl);	
-	pthread_mutex_lock(&glockServerMutex);
-	lockData->state = lock_Data::retrying;
-	pthread_mutex_unlock(&glockServerMutex);
-	while(lockData->waitingClientsList.size() > 0)
-	{
-		pthread_mutex_lock(&glockServerMutex);
-		std::string cltStr = lockData->waitingClientsList.front();
-		lockData->waitingClientsList.pop_front();
-		lockData->cltId = cltStr;
-		pthread_mutex_unlock(&glockServerMutex);
-  	make_sockaddr(cltStr.c_str(), &dstsock);
-		cl = new rpcc(dstsock);
-		if (cl->bind() < 0) {
-    printf("lock_server: call bind\n");
-  	}
-		//std::cout << "\nWe called retry on" << cltStr;
-  	cl->call(rlock_protocol::retry,lockData->id ,r);
-		std::cout << "\nLock " << lockData->id << "granted to___" << cltStr;
-		free(cl);
-	}
-	pthread_mutex_lock(&glockServerMutex);
-	lockData->state = lock_Data::free;
-	//std::cout << "\nRetry Revoke success" ;
-	pthread_mutex_unlock(&glockServerMutex);
-	pthread_exit(NULL);
-}
-*/
 
 int 			
 lock_server_cache::release(lock_protocol::lockid_t lid, std::string id, 
          int &r)
 { 
-	tprintf("release\n");
+	tprintf("release %s\n",id.c_str());
   r = nacquire;
-  return lock_protocol::OK;
-
-	/*
-	//std::cout << "Never called \n\n";
 	pthread_mutex_lock(&glockServerMutex);
   lock_protocol::status ret = lock_protocol::OK;
-	lock_Data* lockData = locks[lid];
-	lockData->state = lock_Data::free;
+	lock* lockData = locks[lid];
+	lockData->state = lock::free;
+	lock_server_utility::released = true;
+	pthread_cond_signal(&gretryThread_cv);
 	pthread_mutex_unlock(&glockServerMutex);
   return ret;
-	*/
 }
 
 lock_protocol::status

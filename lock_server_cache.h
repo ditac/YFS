@@ -8,6 +8,7 @@
 #include "lock_protocol.h"
 #include "rpc.h"
 #include "lock_server.h"
+#include <set>
 
 class lock
 {
@@ -20,7 +21,7 @@ class lock
 	lock_protocol::lockid_t id;
 	lock_state state;
 	std::string ownerStr;
-	std::list<std::string> waitList;
+	std::set<std::string> waitList;
 };
 
 class lock_server_cache 

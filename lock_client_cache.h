@@ -28,7 +28,6 @@ enum lock_client_state
 		free,
 		locked,
 		acquiring,
-		waitingForRetry,
 		releasing
 	};
 
@@ -52,16 +51,24 @@ typedef std::map<lock_protocol::lockid_t,lock_client_state>::iterator lockMapIte
                                        int &);
 };
 
-/*
-class lock_client_Object
+namespace lock_client_utility
 {
-	public:
-		lock_client_Object()
+	void* releaseThread(void *);
+	class releaseData
+	{
+		public:
+		lock_protocol::lockid_t lid;
+		std::string cltId;
+		rpcc *cl;
+		std::map<lock_protocol::lockid_t,lock_client_cache::lock_client_state>  *lockMap;
+		releaseData(lock_protocol::lockid_t ilid, std::string icltId, rpcc* icl,std::map<lock_protocol::lockid_t,lock_client_cache::lock_client_state>  *ilockMap)
 		{
-			state = lock_client_cache::none;	
+			lid = ilid;
+			cltId = icltId;
+			cl = icl;	
+			lockMap = ilockMap;
 		}
-	lock_client_cache::lock_client_state state;
+	};
 };
-*/
 
 #endif
