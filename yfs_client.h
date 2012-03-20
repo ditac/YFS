@@ -58,4 +58,7 @@ class yfs_client {
 
 };
 
+class extent_cache
+{
+};
 #endif 

@@ -53,9 +53,8 @@ int
 yfs_client::getfile(inum inum, fileinfo &fin)
 {
   int r = OK;
-  // You modify this function for Lab 3
-  // - hold and release the file lock
 
+	lc->acquire(inum);
   printf("getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
@@ -71,6 +70,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
 
  release:
 
+	lc->release(inum);
   return r;
 }
 
@@ -78,9 +78,8 @@ int
 yfs_client::getdir(inum inum, dirinfo &din)
 {
   int r = OK;
-  // You modify this function for Lab 3
-  // - hold and release the directory lock
 
+	lc->acquire(inum);
   printf("getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
@@ -92,6 +91,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
   din.ctime = a.ctime;
 
  release:
+	lc->release(inum);
   return r;
 }
 
@@ -99,6 +99,7 @@ int
 yfs_client::read(inum inum,std::string &buf, off_t offset,size_t size)
 {
 	int r = OK;	
+	lc->acquire(inum);
   if (ec->get(inum, buf) != extent_protocol::OK) 
 	{
 		r = IOERR;
@@ -107,6 +108,7 @@ yfs_client::read(inum inum,std::string &buf, off_t offset,size_t size)
 	{
 		buf = buf.substr(offset,size);	
 	}
+	lc->release(inum);
 	return r;
 }
 
@@ -178,6 +180,7 @@ yfs_client::create(inum pinum,const char *name,inum& inum)
 int
 yfs_client::lookup(inum pinum,const char *name,inum& inum)
 {
+	lc->acquire(pinum);
 	int r = OK;	
 	std::string buf;
 	std::string strName(name);
@@ -194,15 +197,15 @@ yfs_client::lookup(inum pinum,const char *name,inum& inum)
 		size_t end = buf.find('\0',start);
 		std::string strInum = buf.substr(start, end - start);
 		inum = n2i(strInum);
-		std::cout << "What happ here" << strInum;
-		std::cout << "\n \n BUFFFFFF" << buf;
 	}
+	lc->release(pinum);
 	return r;
 }
 
 yfs_client::dirmap 
 yfs_client::getDirList(inum pinode)
 {
+	lc->acquire(pinode);
 	yfs_client::dirmap dirList;
 	std::string buf;
 	ec->get(pinode,buf);
@@ -222,6 +225,7 @@ yfs_client::getDirList(inum pinode)
 		nameEnd = buf.find('\0',nameStart);
 		numberEnd = buf.find('\0',nameEnd + 1);
 	}
+	lc->release(pinode);
 	return dirList;
 }
 
