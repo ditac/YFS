@@ -18,7 +18,16 @@ class lock_release_user {
   virtual void dorelease(lock_protocol::lockid_t) = 0;
   virtual ~lock_release_user() {};
 };
-class lock_client_Object;
+class lock_client_Object {
+	public:
+	bool waitingForRetry;
+	bool freeWhenPossible;
+	lock_client_Object()
+	{
+		waitingForRetry = false;
+		freeWhenPossible = false;
+	}
+};
 
 class lock_client_cache : public lock_client {
 public:
@@ -39,6 +48,7 @@ typedef std::map<lock_protocol::lockid_t,lock_client_state>::iterator lockMapIte
   std::string id;
 	
 	std::map<lock_protocol::lockid_t,lock_client_state> lockMap;
+	std::map<lock_protocol::lockid_t,lock_client_Object > lockMetaData;
  public:
 	  static int last_port;
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
@@ -47,8 +57,13 @@ typedef std::map<lock_protocol::lockid_t,lock_client_state>::iterator lockMapIte
   lock_protocol::status release(lock_protocol::lockid_t);
   rlock_protocol::status revoke_handler(lock_protocol::lockid_t, 
                                         int &);
+	void setRetry(lock_protocol::lockid_t lid);
+	void resetRetry(lock_protocol::lockid_t lid);
+	void setFreeNow(lock_protocol::lockid_t lid);
+	void resetFreeNow(lock_protocol::lockid_t lid);
   rlock_protocol::status retry_handler(lock_protocol::lockid_t, 
                                        int &);
+  lock_protocol::status callAcquire(lock_protocol::lockid_t);
 };
 
 namespace lock_client_utility
