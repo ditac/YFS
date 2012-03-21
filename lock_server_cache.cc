@@ -41,7 +41,16 @@ lock_server_utility::revokeThread(void *)
 		{
 			lock *l = revokeList.front();
 			sockaddr_in dstsock;
+			if(l->ownerStr.empty())
+			{
+				//Revoke Sent already
+				revokeList.pop_front();
+				continue;
+			}
 			make_sockaddr(l->ownerStr.c_str(), &dstsock);
+			tprintf("revoke %s\n",l->ownerStr.c_str());
+			//Reset Owner
+			l->ownerStr = "";
 			rpcc* cl = new rpcc(dstsock);
 			if (cl->bind() < 0) {
 				printf("lock_server: call bind\n");
@@ -49,7 +58,6 @@ lock_server_utility::revokeThread(void *)
 			int r;
 			revokeList.pop_front();
 			pthread_mutex_unlock(&glockServerMutex);
-			tprintf("revoke %s\n",l->ownerStr.c_str());
 			cl->call(rlock_protocol::revoke,l->id ,r);
 			pthread_mutex_lock(&glockServerMutex);
 			delete cl;
@@ -125,6 +133,10 @@ lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
 	switch(locks[lid]->state)
 	{
 		case lock::locked:
+			if(id == locks[lid]->ownerStr)
+			{
+				assert(false);
+			}
 		lock_server_utility::revoke(locks[lid]);
 		locks[lid]->waitList.insert(id);
 		lock_server_utility::retry(locks[lid]);

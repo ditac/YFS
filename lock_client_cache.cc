@@ -31,23 +31,6 @@ lock_client_cache::lock_client_cache(std::string xdst,
 }
 
 
-void* 
-lock_client_utility::releaseThread(void *in)
-{
-	lock_client_utility::releaseData* data = (lock_client_utility::releaseData *)in;
-	rpcc *cl = data->cl;
-	std::string id = data->cltId;
-	lock_protocol::lockid_t lid = data->lid;
-	tprintf("release RPC%s for lock %d state \n",id.c_str(),lid);
-	int r;
-	cl->call(lock_protocol::release,lid,id, r);
-	pthread_mutex_lock(&globalClientMutex);
-	(*(data->lockMap))[lid] = lock_client_cache::none;
-	pthread_cond_broadcast(&gClient_cv);
-	pthread_mutex_unlock(&globalClientMutex);
-	pthread_exit(NULL);	
-}
-
 lock_protocol::status
 lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
@@ -63,7 +46,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 			pthread_cond_wait(&gClient_cv, &globalClientMutex);
 			tprintf("Woke Up %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 		}
-		tprintf("Got out\n");
+		tprintf("Got out %s for lock %d\n",id.c_str(),lockMap[lid]);
 		switch(lockMap[lid])
 		{
 			case free:
@@ -82,15 +65,27 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 		{
 			//Error REVOKE
 			if(lockMap[lid] == free)
+			{
 				assert(false);
-			lockMap[lid] = none;
-			if(lockMap[lid] != none)
-				pthread_cond_wait(&gClient_cv, &globalClientMutex);
+			}
+			if(lockMap[lid] == acquiring)
+			{
+				continue;
+			}
+			else if(lockMap[lid] == releasing)
+			{
+				//Server wants lock back already
+				assert(false);
+			}
 		}
 	}while(ret == lock_protocol::RETRY);
 	if(lockMap[lid] != releasing)
 	{
 		lockMap[lid] = locked;
+	}
+	else
+	{
+		//We grant lock but keep it in releasing
 	}
 	tprintf("granted %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	pthread_mutex_unlock(&globalClientMutex);
@@ -137,10 +132,11 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 	{
 		case none:
 			//We have already released. Fix server.
-			//assert(false);
+			assert(false);
 			break;
 		case releasing:
 			//More people want the lock.. Release fast
+			assert(false);
 			break;
 		case free:
 			{
@@ -184,5 +180,22 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
 	pthread_cond_broadcast(&gClient_cv);
 	pthread_mutex_unlock(&globalClientMutex);
   return ret;
+}
+
+void* 
+lock_client_utility::releaseThread(void *in)
+{
+	lock_client_utility::releaseData* data = (lock_client_utility::releaseData *)in;
+	rpcc *cl = data->cl;
+	std::string id = data->cltId;
+	lock_protocol::lockid_t lid = data->lid;
+	tprintf("release RPC%s for lock %d state \n",id.c_str(),lid);
+	int r;
+	cl->call(lock_protocol::release,lid,id, r);
+	pthread_mutex_lock(&globalClientMutex);
+	(*(data->lockMap))[lid] = lock_client_cache::none;
+	pthread_cond_broadcast(&gClient_cv);
+	pthread_mutex_unlock(&globalClientMutex);
+	pthread_exit(NULL);	
 }
 
