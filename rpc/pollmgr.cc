@@ -153,6 +153,7 @@ SelectAIO::watch_fd(int fd, poll_flag flag)
 	if (highfds_ <= fd) 
 		highfds_ = fd;
 
+	printf("The highfds %d \n",highfds_);
 	if (flag == CB_RDONLY) {
 		FD_SET(fd,&rfds_);
 	}else if (flag == CB_WRONLY) {
@@ -193,6 +194,7 @@ SelectAIO::unwatch_fd(int fd, poll_flag flag)
 	}else{
 		VERIFY(0);
 	}
+
 
 	if (!FD_ISSET(fd,&rfds_) && !FD_ISSET(fd,&wfds_)) {
 		if (fd == highfds_) {

@@ -49,12 +49,14 @@ typedef std::map<lock_protocol::lockid_t,lock_client_state>::iterator lockMapIte
 	
 	std::map<lock_protocol::lockid_t,lock_client_state> lockMap;
 	std::map<lock_protocol::lockid_t,lock_client_Object > lockMetaData;
+	std::list<lock_protocol::lockid_t> toBeReleasedList;
  public:
 	  static int last_port;
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache() {};
   lock_protocol::status acquire(lock_protocol::lockid_t);
   lock_protocol::status release(lock_protocol::lockid_t);
+  lock_protocol::status releaseNow();
   rlock_protocol::status revoke_handler(lock_protocol::lockid_t, 
                                         int &);
 	void setRetry(lock_protocol::lockid_t lid);

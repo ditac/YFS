@@ -12,7 +12,6 @@
 int lock_client_cache::last_port = 0;
 
 pthread_mutex_t globalClientMutex;
-pthread_mutex_t globalClientReleaseMutex;
 pthread_cond_t gClient_cv;
 pthread_cond_t gReleaseThread_cv;
 
@@ -29,6 +28,11 @@ lock_client_cache::lock_client_cache(std::string xdst,
   std::ostringstream host;
   host << hname << ":" << rlsrpc->port();
   id = host.str();
+	VERIFY(pthread_mutex_init(&globalClientMutex, NULL) == 0);
+	VERIFY(pthread_cond_init(&gClient_cv, NULL) == 0);
+	VERIFY(pthread_cond_init(&gReleaseThread_cv, NULL) == 0);
+	pthread_t release_t;		
+	pthread_create(&release_t,NULL,lock_client_utility::releaseThread,(void *)this);
 }
 
 
@@ -197,15 +201,16 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
                                   int &r)
 {
 	pthread_mutex_lock(&globalClientMutex);
+	tprintf("revoke %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
+	r=0;
   int ret = rlock_protocol::OK;
 	switch (lockMap[lid])
 	{
 		case free:
 			{
 				lockMap[lid] = releasing;
-				pthread_t release_t;		
-				lock_client_utility::releaseData *data = new lock_client_utility::releaseData(lid,id,cl,&lockMap);
-				pthread_create(&release_t,NULL,lock_client_utility::releaseThread,(void *)data);
+				toBeReleasedList.push_back(lid);
+				pthread_cond_broadcast(&gReleaseThread_cv);
 			}
 			break;
 		case releasing:
@@ -237,27 +242,49 @@ void*
 lock_client_utility::releaseThread(void *in)
 {
 	pthread_mutex_lock(&globalClientMutex);
-	lock_client_utility::releaseData* data = (lock_client_utility::releaseData *)in;
-	rpcc *cl = data->cl;
-	std::string id = data->cltId;
-	lock_protocol::lockid_t lid = data->lid;
-	tprintf("release RPC%s for lock %d state \n",id.c_str(),lid);
-	int r;
-	tprintf("release called \n");
-	pthread_mutex_unlock(&globalClientMutex);
-	lock_protocol::status ret = cl->call(lock_protocol::release,lid,id, r);
-	pthread_mutex_lock(&globalClientMutex);
-	if(ret == lock_protocol::OK)
+	lock_client_cache *client = (lock_client_cache *)in;
+
+	while(1)
 	{
-		(*(data->lockMap))[lid] = lock_client_cache::none;
+		client->releaseNow();
+		pthread_cond_wait(&gReleaseThread_cv, &globalClientMutex);
 	}
-	else
-	{
-		assert(false);
-	}
-	pthread_cond_broadcast(&gClient_cv);
-	delete data;
 	pthread_mutex_unlock(&globalClientMutex);
 	pthread_exit(NULL);	
+}
+
+
+lock_protocol::status 
+lock_client_cache::releaseNow()
+{
+	lock_protocol::status ret = lock_protocol::OK;
+	if(toBeReleasedList.empty())
+		return ret;
+	while(!toBeReleasedList.empty())
+	{
+		lock_protocol::lockid_t lid = toBeReleasedList.front();
+		if(lockMap[lid] != releasing)
+		{
+			assert(false);
+		}
+		resetFreeNow(lid);
+		int r;
+		tprintf("release called from Thread \n");
+		pthread_mutex_unlock(&globalClientMutex);
+		ret = cl->call(lock_protocol::release, lid,id, r);
+		pthread_mutex_lock(&globalClientMutex);
+
+		if(ret == lock_protocol::OK)
+		{
+			lockMap[lid] = none;
+			toBeReleasedList.pop_front();
+		}
+		else
+		{
+			assert(false);
+		}
+		pthread_cond_broadcast(&gClient_cv);
+	}
+	return ret;
 }
 

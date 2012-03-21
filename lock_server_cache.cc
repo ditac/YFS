@@ -60,6 +60,7 @@ lock_server_utility::revokeThread(void *)
 			pthread_mutex_unlock(&glockServerMutex);
 			cl->call(rlock_protocol::revoke,l->id ,r);
 			pthread_mutex_lock(&glockServerMutex);
+			tprintf("revoke Completed \n");
 			delete cl;
 		}
 		pthread_cond_wait(&grevokeThread_cv, &glockServerMutex);
