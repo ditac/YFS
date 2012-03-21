@@ -34,7 +34,6 @@ my $f1 = "a$$";
 my $f2 = "b$$";
 
 my $files = { };
-
 print "Write and read one file: ";
 writeone($dir1, $f1, 600);
 checkcontent($dir1, $f1);

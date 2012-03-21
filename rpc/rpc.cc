@@ -662,8 +662,64 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 {
 	ScopedLock rwl(&reply_window_m_);
 
-        // You fill this in for Lab 1.
-	return NEW;
+	if(xid <= last_xid_rep_[clt_nonce])
+	{
+		return FORGOTTEN;
+	}
+
+	rpcs::rpcstate_t retVal=NEW;
+	std::list<reply_t> clientReply = reply_window_[clt_nonce];
+
+	//Check if the xid exists. 
+	std::list<reply_t>::iterator itr = clientReply.begin();	
+	for(;itr!=clientReply.end();itr++)
+	{
+		if(xid == (*itr).xid )
+		{
+			if((*itr).cb_present)
+			{
+				*b = (*itr).buf;
+				*sz = (*itr).sz;
+				retVal = DONE;
+			}
+			else
+			{
+				retVal = INPROGRESS;
+			}
+			break;
+		}
+	}
+
+	//Remember a new request. Also update the highest xid_rep.
+	if(retVal == NEW)
+	{
+		if(xid_rep > last_xid_rep_[clt_nonce])
+		{
+			last_xid_rep_[clt_nonce] = xid_rep;
+		}
+		clientReply.push_back(reply_t(xid));
+	}
+
+	//Delete xids <= xid_rep
+	itr = clientReply.begin();	
+	while(itr!=clientReply.end())
+	{
+		if((*itr).xid <= last_xid_rep_[clt_nonce])
+		{
+			if((*itr).cb_present)
+			{
+				free((*itr).buf);
+				itr = clientReply.erase(itr);
+			}
+		}
+		else
+		{
+			itr++;
+		}
+	}
+	reply_window_[clt_nonce] = clientReply;
+
+	return retVal;
 }
 
 // rpcs::dispatch calls add_reply when it is sending a reply to an RPC,
@@ -676,7 +732,18 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 		char *b, int sz)
 {
 	ScopedLock rwl(&reply_window_m_);
-        // You fill this in for Lab 1.
+	std::list<reply_t> clientReply = reply_window_[clt_nonce];
+	std::list<reply_t>::iterator itr = clientReply.begin();
+	for(;itr!=clientReply.end();itr++)
+	{
+		if(xid == (*itr).xid)
+		{
+			(*itr).buf = b;
+			(*itr).sz = sz;
+			(*itr).cb_present = true;
+		}
+	}
+	reply_window_[clt_nonce] = clientReply;
 }
 
 void
