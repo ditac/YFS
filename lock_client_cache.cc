@@ -35,6 +35,7 @@ lock_protocol::status
 lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
 	pthread_mutex_lock(&globalClientMutex);
+	/*
 	tprintf("acquire %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	int r;
   lock_protocol::status ret = lock_protocol::OK;
@@ -88,6 +89,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 		//We grant lock but keep it in releasing
 	}
 	tprintf("granted %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
+	*/
 	pthread_mutex_unlock(&globalClientMutex);
   return lock_protocol::OK;
 }
@@ -96,8 +98,9 @@ lock_protocol::status
 lock_client_cache::release(lock_protocol::lockid_t lid) 
 { 
 	pthread_mutex_lock(&globalClientMutex);
-	tprintf("release %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	lock_protocol::status ret = lock_protocol::OK;
+	/*
+	tprintf("release %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	int r;
 	switch(lockMap[lid])
 	{
@@ -117,6 +120,7 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 			break;
 	}
 	pthread_cond_broadcast(&gClient_cv);
+	*/
 	pthread_mutex_unlock(&globalClientMutex);
 	return ret;
 }
@@ -126,8 +130,9 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
                                   int &r)
 {
 	pthread_mutex_lock(&globalClientMutex);
-	tprintf("revoke %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
   int ret = rlock_protocol::OK;
+	/*
+	tprintf("revoke %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	switch(lockMap[lid])
 	{
 		case none:
@@ -151,6 +156,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
 			lockMap[lid] = releasing;
 			break;
 	}
+	*/
 	pthread_mutex_unlock(&globalClientMutex);
   return ret;
 }
@@ -160,8 +166,9 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
                                  int &)
 {
 	pthread_mutex_lock(&globalClientMutex);
-	tprintf("retry %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	int ret = rlock_protocol::OK;
+	/*
+	tprintf("retry %s for lock %d state %d\n",id.c_str(),lid,lockMap[lid]);
 	switch(lockMap[lid])
 	{
 		case none:
@@ -178,6 +185,7 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
 			break;
 	}
 	pthread_cond_broadcast(&gClient_cv);
+	*/
 	pthread_mutex_unlock(&globalClientMutex);
   return ret;
 }
@@ -185,6 +193,7 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
 void* 
 lock_client_utility::releaseThread(void *in)
 {
+	/*
 	lock_client_utility::releaseData* data = (lock_client_utility::releaseData *)in;
 	rpcc *cl = data->cl;
 	std::string id = data->cltId;
@@ -196,6 +205,7 @@ lock_client_utility::releaseThread(void *in)
 	(*(data->lockMap))[lid] = lock_client_cache::none;
 	pthread_cond_broadcast(&gClient_cv);
 	pthread_mutex_unlock(&globalClientMutex);
+	*/
 	pthread_exit(NULL);	
 }
 
