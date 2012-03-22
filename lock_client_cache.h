@@ -18,6 +18,7 @@ class lock_release_user {
   virtual void dorelease(lock_protocol::lockid_t) = 0;
   virtual ~lock_release_user() {};
 };
+
 class lock_client_Object {
 	public:
 	bool waitingForRetry;

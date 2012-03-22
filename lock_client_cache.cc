@@ -173,6 +173,10 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
 				int r;
 				tprintf("release called \n");
 				pthread_mutex_unlock(&globalClientMutex);
+				if(lu != NULL)
+				{
+					lu->dorelease(lid);
+				}
 				ret = cl->call(lock_protocol::release, lid,id, r);
 				pthread_mutex_lock(&globalClientMutex);
 
@@ -271,6 +275,10 @@ lock_client_cache::releaseNow()
 		int r;
 		tprintf("release called from Thread \n");
 		pthread_mutex_unlock(&globalClientMutex);
+			if(lu != NULL)
+				{
+					lu->dorelease(lid);
+				}		
 		ret = cl->call(lock_protocol::release, lid,id, r);
 		pthread_mutex_lock(&globalClientMutex);
 
