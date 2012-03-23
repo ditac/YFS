@@ -401,14 +401,10 @@ int
 extent_cache::remove(extent_protocol::extentid_t id)
 {
 	printf("Cache Remove Called %d",id);
-	/*
 	fileVal f = fileList[id];
 	f.remove = true;
 	fileList[id] = f;
 	return extent_protocol::OK; 
-	*/
-	fileList.erase(id);
-	return ec->remove(id);
 }
 
 extent_cache::extent_cache(std::string extent_dst)
@@ -420,14 +416,12 @@ void
 extent_cache::dorelease(lock_protocol::lockid_t id)
 {
 	printf("Called Flusj \n");
-	/*
 	if(fileList[id].remove)
 	{
 		printf("Called Remove on %d \n",id);
 		ec->remove(id);
 	}
-	*/
-	if(fileList[id].dirty)
+	else if(fileList[id].dirty)
 	{
 		ec->put(id,fileList[id].buf);
 	}
