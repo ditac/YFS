@@ -188,7 +188,6 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
 		}
 		delete cl;
 	}
-	std::cout << "Prepare called  " << accepts.size() << "\n";
   return true;
 }
 
@@ -277,12 +276,11 @@ acceptor::preparereq(std::string src, paxos_protocol::preparearg a,
     paxos_protocol::prepareres &r)
 {
   ScopedLock ml(&pxs_mutex);
-	if(instance_h > a.instance)
+	if(a.instance <= instance_h)
 	{
 		r.oldinstance = true;	
 		r.accept = false;
-		r.n_a = n_a;
-		r.v_a = v_a;
+		r.v_a = values[a.instance];
 	}
 	else if(a.n > n_h)
 	{
@@ -305,6 +303,7 @@ acceptor::preparereq(std::string src, paxos_protocol::preparearg a,
 paxos_protocol::status
 acceptor::acceptreq(std::string src, paxos_protocol::acceptarg a, bool &r)
 {
+  ScopedLock ml(&pxs_mutex);
 	if(a.n >= n_h)
 	{
 		n_a = a.n;
