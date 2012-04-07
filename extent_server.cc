@@ -8,37 +8,75 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-extent_server::extent_server() {}
+extent_server::extent_server() 
+{
+	VERIFY(pthread_mutex_init(&extent_server_m_, 0) == 0);
+	std::string buf;
+	extent_protocol::attr a;
+	a.size = buf.size();
+  a.atime = 0;
+  a.mtime = (unsigned int) time(NULL);
+  a.ctime = (unsigned int) time(NULL);
+	fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(0x00000001,fileVal(buf,a)));
+}
 
 
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
-  // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+	ScopedLock rwl(&extent_server_m_);
+  printf("put called %d\n",id);
+	extent_protocol::attr a;
+	a.size = buf.size();
+  a.atime = 0;
+  a.mtime = (unsigned int) time(NULL);
+  a.ctime = (unsigned int) time(NULL);
+	fileVal val(buf,a);
+	fileList[id] = val;
+  return extent_protocol::OK;
 }
 
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
-  // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+	ScopedLock rwl(&extent_server_m_);
+	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
+	fileListIter iter = fileList.find(id);
+	if(iter != fileList.end())
+	{
+		buf = iter->second.buf;
+		iter->second.attr.atime = (unsigned int) time(NULL);
+		fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(id,iter->second));
+		retVal = extent_protocol::OK;	
+	}
+  return retVal;
 }
 
 int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr &a)
 {
-  // You fill this in for Lab 2.
-  // You replace this with a real implementation. We send a phony response
-  // for now because it's difficult to get FUSE to do anything (including
-  // unmount) if getattr fails.
-  a.size = 0;
-  a.atime = 0;
-  a.mtime = 0;
-  a.ctime = 0;
-  return extent_protocol::OK;
+	ScopedLock rwl(&extent_server_m_);
+	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
+	fileListIter iter = fileList.find(id);
+	if(iter != fileList.end())
+	{
+		a.size = iter->second.attr.size;
+		a.atime = iter->second.attr.atime;
+  	a.mtime = iter->second.attr.mtime;
+  	a.ctime = iter->second.attr.ctime;
+		retVal = extent_protocol::OK;	
+	}
+  return retVal;
 }
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
-  // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+	ScopedLock rwl(&extent_server_m_);
+  printf("remove called %d\n",id);
+	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
+	fileListIter iter = fileList.find(id);
+	if(iter != fileList.end())
+	{
+		fileList.erase(id);
+		retVal = extent_protocol::OK;
+	}
+  return retVal;
 }
 

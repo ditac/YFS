@@ -150,10 +150,45 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
          std::vector<std::string> nodes,
          std::string &v)
 {
-  // You fill this in for Lab 6
-  // Note: if got an "oldinstance" reply, commit the instance using
-  // acc->commit(...), and return false.
-  return false;
+	int ret = 0;
+
+	unsigned n = 0; 
+	for(unsigned i=0;i < nodes.size();i++)
+	{
+		sockaddr_in dstsock;
+		make_sockaddr(nodes[i].c_str(), &dstsock);
+		rpcc* cl = new rpcc(dstsock);
+		if (cl->bind(rpcc::to(1000)) < 0) {
+			printf("lock_server: call bind\n");
+			delete cl;
+			continue;
+		}
+		paxos_protocol::preparearg a;
+		a.instance = instance;
+		a.n = my_n;
+		paxos_protocol::prepareres res;
+		ret = cl->call(paxos_protocol::preparereq , nodes[i], a, res, rpcc::to(1000));
+		if(ret == paxos_protocol::OK)
+		{
+			if(res.oldinstance)
+			{
+				acc->commit(instance,res.v_a);
+				delete cl;
+				return false;
+			}
+			else if(res.accept)
+			{
+				accepts.push_back(nodes[i]);
+				if(n < res.n_a.n)
+				{
+					v = res.v_a;	
+					n = res.n_a.n;
+				}	
+			}
+		}
+		delete cl;
+	}
+  return true;
 }
 
 // run() calls this to send out accept RPCs to accepts.
@@ -162,14 +197,52 @@ void
 proposer::accept(unsigned instance, std::vector<std::string> &accepts,
         std::vector<std::string> nodes, std::string v)
 {
-  // You fill this in for Lab 6
+	int ret = 0;
+	for(unsigned i=0;i < nodes.size();i++)
+	{
+		sockaddr_in dstsock;
+		make_sockaddr(nodes[i].c_str(), &dstsock);
+		rpcc* cl = new rpcc(dstsock);
+		if (cl->bind(rpcc::to(1000)) < 0) {
+			printf("lock_server: call bind\n");
+		}
+		paxos_protocol::acceptarg a;
+		a.instance = instance;
+		a.n = my_n;
+		a.v = v;
+		bool res;
+		ret = cl->call(paxos_protocol::acceptreq , nodes[i], a, res, rpcc::to(1000));
+		if(ret == paxos_protocol::OK)
+		{
+			if(res)
+			{
+				accepts.push_back(nodes[i]);
+			}
+		}
+		delete cl;
+	}
 }
 
 void
 proposer::decide(unsigned instance, std::vector<std::string> accepts, 
 	      std::string v)
 {
-  // You fill this in for Lab 6
+	int ret = 0;
+	for(unsigned i=0;i < accepts.size();i++)
+	{
+		sockaddr_in dstsock;
+		make_sockaddr(accepts[i].c_str(), &dstsock);
+		rpcc* cl = new rpcc(dstsock);
+		if (cl->bind(rpcc::to(1000)) < 0) {
+			printf("lock_server: call bind\n");
+		}
+		paxos_protocol::decidearg a;
+		a.instance = instance;
+		a.v = v;
+		int r;
+		ret = cl->call(paxos_protocol::decidereq , accepts[i], a, r, rpcc::to(1000));
+		delete cl;
+	}
 }
 
 acceptor::acceptor(class paxos_change *_cfg, bool _first, std::string _me, 
@@ -202,20 +275,46 @@ paxos_protocol::status
 acceptor::preparereq(std::string src, paxos_protocol::preparearg a,
     paxos_protocol::prepareres &r)
 {
-  // You fill this in for Lab 6
-  // Remember to initialize *BOTH* r.accept and r.oldinstance appropriately.
-  // Remember to *log* the proposal if the proposal is accepted.
+  ScopedLock ml(&pxs_mutex);
+	if(a.instance <= instance_h)
+	{
+		r.oldinstance = true;	
+		r.accept = false;
+		r.v_a = values[a.instance];
+	}
+	else if(a.n > n_h)
+	{
+		n_h = a.n;
+		r.oldinstance = false;
+		r.accept = true;
+		r.n_a = n_a;
+		r.v_a = v_a;
+		l->logprop(n_h);
+	}	
+	else
+	{
+		r.oldinstance = false;
+		r.accept = false;	
+	}
   return paxos_protocol::OK;
-
 }
 
 // the src argument is only for debug purpose
 paxos_protocol::status
 acceptor::acceptreq(std::string src, paxos_protocol::acceptarg a, bool &r)
 {
-  // You fill this in for Lab 6
-  // Remember to *log* the accept if the proposal is accepted.
-
+  ScopedLock ml(&pxs_mutex);
+	if(a.n >= n_h)
+	{
+		n_a = a.n;
+		v_a = a.v;
+		r = true;
+		l->logaccept(n_a,v_a);
+	}
+	else
+	{
+		r = false;
+	}
   return paxos_protocol::OK;
 }
 
@@ -316,3 +415,4 @@ proposer::breakpoint(int b)
     break2 = true;
   }
 }
+
