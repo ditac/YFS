@@ -35,6 +35,15 @@ class lock_client_cache_rsm : public lock_client {
   std::string id;
   lock_protocol::xid_t xid;
  public:
+	enum state
+	{
+		none,
+		free,
+		locked,
+		acquiring,
+		releasing
+	};
+
   static int last_port;
   lock_client_cache_rsm(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache_rsm() {};
@@ -45,7 +54,10 @@ class lock_client_cache_rsm : public lock_client {
 				        lock_protocol::xid_t, int &);
   rlock_protocol::status retry_handler(lock_protocol::lockid_t, 
 				       lock_protocol::xid_t, int &);
+	fifo<lock_protocol::lockid_t> releaseQ;
+	std::map<lock_protocol::lockid_t,state>  lockMap;
+	std::map<lock_protocol::lockid_t,bool> lockReleaseMap;
+	lock_protocol::status callAcquire(lock_protocol::lockid_t lid);
 };
-
 
 #endif

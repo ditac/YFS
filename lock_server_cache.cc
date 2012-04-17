@@ -18,7 +18,6 @@ namespace lock_server_utility
 
 //------------MUTEXES-----------
 pthread_mutex_t glockServerMutex;
-pthread_cond_t glockServer_cv;
 pthread_cond_t grevokeThread_cv;
 pthread_cond_t gretryThread_cv;
 
