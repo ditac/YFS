@@ -92,6 +92,10 @@ lock_server_cache_rsm::retryer()
 int lock_server_cache_rsm::acquire(lock_protocol::lockid_t lid, std::string id, 
              lock_protocol::xid_t xid, int &r)
 {
+	if(!rsm->amiprimary())
+	{
+		return rsm_client_protocol::NOTPRIMARY;
+	}
 	pthread_mutex_lock(&gServerMutex);
   r = nacquire;
 	lock_protocol::status ret = lock_protocol::OK;
@@ -150,6 +154,10 @@ int
 lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id, 
          lock_protocol::xid_t xid, int &r)
 {
+	if(!rsm->amiprimary())
+	{
+		return rsm_client_protocol::NOTPRIMARY;
+	}
 	pthread_mutex_lock(&gServerMutex);
 	r = nacquire;
   lock_protocol::status ret = lock_protocol::OK;

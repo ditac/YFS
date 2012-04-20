@@ -55,9 +55,7 @@ lock_client_cache_rsm::lock_client_cache_rsm(std::string xdst,
 	VERIFY(pthread_cond_init(&gRevoke_cv, NULL) == 0);
 	VERIFY(pthread_cond_init(&gRetry_cv, NULL) == 0);
 
-  // You fill this in Step Two, Lab 7
-  // - Create rsmc, and use the object to do RPC 
-  //   calls instead of the rpcc object of lock_client
+	rsmc = new rsm_client(xdst);
   pthread_t th;
   int r = pthread_create(&th, NULL, &releasethread, (void *) this);
   VERIFY (r == 0);
@@ -84,7 +82,7 @@ lock_client_cache_rsm::releaser()
 		lock_protocol::status ret = lock_protocol::OK;
 		pthread_mutex_unlock(&gCltMutex);
 		int r;
-		ret = cl->call(lock_protocol::release, lid,id,xid,r);
+		ret = rsmc->call(lock_protocol::release, lid,id,xid,r);
 		pthread_mutex_lock(&gCltMutex);
 
 		if(ret == lock_protocol::OK)
@@ -172,7 +170,7 @@ lock_client_cache_rsm::callAcquire(lock_protocol::lockid_t lid)
 	pthread_mutex_unlock(&gCltMutex);
 	tprintf("Acquire Called %s\n",id.c_str());
 	int r;
-	lock_protocol::status ret = cl->call(lock_protocol::acquire, lid,id,xid,r);
+	lock_protocol::status ret = rsmc->call(lock_protocol::acquire, lid,id,xid,r);
 	pthread_mutex_lock(&gCltMutex);
 	return ret;
 }
