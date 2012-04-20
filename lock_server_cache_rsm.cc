@@ -33,6 +33,7 @@ lock_server_cache_rsm::lock_server_cache_rsm(class rsm *_rsm)
   : rsm (_rsm)
 {
   pthread_t th;
+	rsm->set_state_transfer(this);
   int r = pthread_create(&th, NULL, &revokethread, (void *) this);
   VERIFY (r == 0);
   r = pthread_create(&th, NULL, &retrythread, (void *) this);
@@ -186,14 +187,80 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
 std::string
 lock_server_cache_rsm::marshal_state()
 {
-  std::ostringstream ost;
-  std::string r;
-  return r;
+	pthread_mutex_lock(&gServerMutex);
+	marshall rep;
+	unsigned size = locks.size();
+	rep << size;
+	std::map<lock_protocol::lockid_t,lock *>::iterator iter_lock;
+	for (iter_lock = locks.begin(); iter_lock != locks.end(); iter_lock++) 
+	{
+		lock_protocol::lockid_t lid = iter_lock->first;
+		lock* l = iter_lock->second;
+		rep << lid;
+		rep << l->state;
+		rep << l->ownerStr;
+		size = l->waitList.size();
+		rep << size;
+		std::set<std::string>::iterator waitIter;
+
+		for(waitIter=l->waitList.begin();waitIter != l->waitList.end(); waitIter++)
+		{
+			std::string waitingClient = (*waitIter);        
+			rep << waitingClient;
+		}
+		size = l->xidMap.size();
+		rep << size;
+		std::map<std::string,lock_protocol::xid_t>::iterator xidIter;
+		for(xidIter=l->xidMap.begin();xidIter != l->xidMap.end(); xidIter++)
+		{
+			rep << xidIter->first;  
+			rep << xidIter->second;
+		}
+	}
+	pthread_mutex_unlock(&gServerMutex);
+	return rep.str();
 }
 
 void
 lock_server_cache_rsm::unmarshal_state(std::string state)
 {
+	pthread_mutex_lock(&gServerMutex);
+	unmarshall rep(state);
+	unsigned size;
+	rep >> size;
+	for (unsigned i=0;i<size;i++) 
+	{
+		lock_protocol::lockid_t lid ;
+		lock* l  = new lock();
+		rep >> lid;
+		int state;      
+		rep >> state;
+		l->state = (lock::lock_state)state;
+		rep >> l->ownerStr;
+		unsigned sizeOfWaitList;
+		rep >> sizeOfWaitList;
+
+		for(unsigned j=0;j<sizeOfWaitList;j++)
+		{
+			std::string waitingClient;      
+			rep >> waitingClient;
+			l->waitList.insert(waitingClient);
+		}
+		unsigned sizeOfXid;
+		rep >> sizeOfXid;
+		std::map<std::string,lock_protocol::xid_t>::iterator xidIter;
+		for(unsigned k=0;k<sizeOfXid;k++)
+		{
+			std::string xid;
+			lock_protocol::xid_t id;
+			rep >> xid;     
+			rep >> id;
+			l->xidMap[xid] = id;
+		}
+		locks[lid] = l;
+	}
+	pthread_mutex_unlock(&gServerMutex);
+
 }
 
 lock_protocol::status
