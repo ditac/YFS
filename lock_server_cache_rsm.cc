@@ -227,10 +227,13 @@ lock_server_cache_rsm::marshal_state()
 void
 lock_server_cache_rsm::unmarshal_state(std::string state)
 {
+	tprintf("Unmarshall called");
 	pthread_mutex_lock(&gServerMutex);
+	tprintf("Unmarshall Lock Acquired");
 	unmarshall rep(state);
 	unsigned size;
 	rep >> size;
+
 	for (unsigned i=0;i<size;i++) 
 	{
 		lock_protocol::lockid_t lid ;
@@ -249,9 +252,12 @@ lock_server_cache_rsm::unmarshal_state(std::string state)
 			rep >> waitingClient;
 			l->waitList.insert(waitingClient);
 		}
+	tprintf("breadcrumb");
 		unsigned sizeOfXid;
 		rep >> sizeOfXid;
 		std::map<std::string,lock_protocol::xid_t>::iterator xidIter;
+		std::map<std::string, lock_protocol::xid_t> test;
+		l->xidMap = test;
 		for(unsigned k=0;k<sizeOfXid;k++)
 		{
 			std::string xid;
@@ -259,7 +265,9 @@ lock_server_cache_rsm::unmarshal_state(std::string state)
 			rep >> xid;     
 			rep >> id;
 			l->xidMap[xid] = id;
+	tprintf("breadcrumb in for");
 		}
+	tprintf("breadcrumb");
 		locks[lid] = l;
 	}
 	pthread_mutex_unlock(&gServerMutex);

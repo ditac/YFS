@@ -233,16 +233,24 @@ rsm::sync_with_primary()
 {
 	std::string m = primary;
 	tprintf("Called sync with primary");
-	while(true)
+	if(vid_insync != vid_commit)
+		{
+			return true;
+		}
+	while(!statetransfer(m))
 	{
 		if(vid_insync != vid_commit)
 		{
 			return true;
 		}
-		if(statetransfer(m))
+		sleep(1);
+	}
+	while(!statetransferdone(m))
+	{
+		if(vid_insync != vid_commit)
 		{
-			return statetransferdone(m);
-		}	
+			return true;
+		}
 		sleep(1);
 	}
 	return true;
@@ -276,7 +284,9 @@ rsm::statetransfer(std::string m)
 		return false;
 	}
 	if (stf && last_myvs != r.last) {
+		tprintf("Trying to unmarshall");
 		stf->unmarshal_state(r.state);
+		tprintf(" unmarshalled");
 	}
 	last_myvs = r.last;
 	tprintf("rsm::statetransfer transfer from %s success, vs(%d,%d)\n", 
@@ -475,8 +485,10 @@ rsm::transferreq(std::string src, viewstamp last, unsigned vid,
 	rsm_protocol::status
 rsm::transferdonereq(std::string m, unsigned vid, int &)
 {
+	tprintf("Transfer Request Done");
 	int ret = rsm_protocol::OK;
 	ScopedLock ml(&rsm_mutex);
+	tprintf("Transfer Request Done With Lock");
 	if(!insync || vid != vid_insync)
 	{
 		return rsm_protocol::BUSY;
