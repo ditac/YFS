@@ -168,6 +168,7 @@ rsm::recovery()
 		if (primary == cfg->myaddr()) {
 			r = sync_with_backups();
 		} else {
+			tprintf("Calling sync with primary %d\n", vid_insync);
 			r = sync_with_primary();
 		}
 		tprintf("recovery: sync done\n");
@@ -175,7 +176,10 @@ rsm::recovery()
 		// If there was a commited viewchange during the synchronization, restart
 		// the recovery
 		if (vid_insync != vid_commit)
+		{
+			tprintf("Recovery should restart");
 			continue;
+		}
 
 		if (r) { 
 			myvs.vid = vid_commit;
@@ -204,12 +208,21 @@ rsm::sync_with_backups()
 	}
 	pthread_mutex_lock(&rsm_mutex);
 	// Start accepting synchronization request (statetransferreq) now!
-	backups = cfg->get_view(vid_commit);
+	
 	insync = true;
-	while(vid_insync == vid_commit && backups.size()!=0 )
+	backups = cfg->get_view(vid_insync);
+	//Going to sleep
+	tprintf("Goin to sleep %u",vid_commit);
+	while( vid_insync == vid_commit && backups.size()!=1 )
 	{
-		pthread_cond_wait(&sync_cond, &rsm_mutex);
+		struct timespec timeToWait;
+		struct timeval now;
+		gettimeofday(&now,NULL);
+		timeToWait.tv_sec = now.tv_sec + 1;
+		timeToWait.tv_nsec = now.tv_usec*1000;
+		pthread_cond_timedwait(&sync_cond, &rsm_mutex, &timeToWait);
 	}
+
 	insync = false;
 	return true;
 }
@@ -218,10 +231,21 @@ rsm::sync_with_backups()
 	bool
 rsm::sync_with_primary()
 {
-	// Remember the primary of vid_insync
 	std::string m = primary;
-	while(!statetransfer(m));
-	return statetransferdone(m);
+	tprintf("Called sync with primary");
+	while(true)
+	{
+		if(vid_insync != vid_commit)
+		{
+			return true;
+		}
+		if(statetransfer(m))
+		{
+			return statetransferdone(m);
+		}	
+		sleep(1);
+	}
+	return true;
 }
 
 
@@ -241,6 +265,7 @@ rsm::statetransfer(std::string m)
 	VERIFY(pthread_mutex_unlock(&rsm_mutex)==0);
 	rpcc *cl = h.safebind();
 	if (cl) {
+		tprintf("vidInsync %d\n",vid_insync);
 		ret = cl->call(rsm_protocol::transferreq, cfg->myaddr(), 
 				last_myvs, vid_insync, r, rpcc::to(1000));
 	}
@@ -334,7 +359,7 @@ rsm::commit_change_wo(unsigned vid)
 	void
 rsm::execute(int procno, std::string req, std::string &r)
 {
-	tprintf("execute\n");
+	tprintf("execute myvs %d seqNo %d \n",myvs.vid,myvs.seqno);
 	handler *h = procs[procno];
 	VERIFY(h);
 	unmarshall args(req);
@@ -372,7 +397,7 @@ rsm::client_invoke(int procno, std::string req, std::string &r)
 
 	{
 		ScopedLock ml(&invoke_mutex);
-		for(unsigned i=0;i<mem.size();i++)
+		for(unsigned i=1;i<mem.size();i++)
 		{
 			handle h(mem[i]);
 			rpcc *cl = h.safebind();
@@ -389,6 +414,8 @@ rsm::client_invoke(int procno, std::string req, std::string &r)
 			}
 		}
 		execute(procno,req,r);
+	last_myvs = myvs;
+	myvs.seqno++;
 	}
 
 	return ret;
@@ -426,12 +453,18 @@ rsm::transferreq(std::string src, viewstamp last, unsigned vid,
 	// Code will be provided in Lab 7
 	tprintf("transferreq from %s (%d,%d) vs (%d,%d)\n", src.c_str(), 
 			last.vid, last.seqno, last_myvs.vid, last_myvs.seqno);
+	tprintf("Vid %u Insync Vid %u ", vid, vid_insync);
 	if (vid != vid_insync) {
+		tprintf("Exit with busy");
 		return rsm_protocol::BUSY;
 	}
 	if (stf && last != last_myvs) 
+	{
+		tprintf("Didnt come in ");
 		r.state = stf->marshal_state();
+	}
 	r.last = last_myvs;
+	tprintf("Exit!!");
 	return ret;
 }
 
@@ -450,13 +483,15 @@ rsm::transferdonereq(std::string m, unsigned vid, int &)
 	}
 	else
 	{
+		tprintf("We were actually called!! %d",backups.size());
 		std::vector<std::string>::iterator iter = std::find(backups.begin(), backups.end(), m);
 		if(iter !=backups.end())
 		{
 			backups.erase(iter);
 		}
-		if(backups.size() == 0)
+		if(backups.size() == 1)
 		{
+			tprintf("All IN SYNC");
 			pthread_cond_broadcast(&sync_cond);
 		}
 	}

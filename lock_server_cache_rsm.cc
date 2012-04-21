@@ -105,7 +105,7 @@ int lock_server_cache_rsm::acquire(lock_protocol::lockid_t lid, std::string id,
 	{
 		locks[lid] = new lock();
 	}
-	tprintf("Acquire Called %s \n",id.c_str());
+	tprintf("Acquire Called %s with xid %d\n",id.c_str(),xid);
 	//I dont know why but this works and I am going to keep it for now.
 	std::map<std::string, lock_protocol::xid_t> test;
 	test[id] = xid;
@@ -187,7 +187,9 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
 std::string
 lock_server_cache_rsm::marshal_state()
 {
+	tprintf("Marshall Called");
 	pthread_mutex_lock(&gServerMutex);
+	tprintf("Marshall Lock Acquired");
 	marshall rep;
 	unsigned size = locks.size();
 	rep << size;
@@ -217,6 +219,7 @@ lock_server_cache_rsm::marshal_state()
 			rep << xidIter->second;
 		}
 	}
+	tprintf("Marshall finished");
 	pthread_mutex_unlock(&gServerMutex);
 	return rep.str();
 }
