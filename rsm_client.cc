@@ -28,6 +28,8 @@ void
 rsm_client::primary_failure()
 {
   // You fill this in for Lab 7
+  primary = known_mems[1];
+  VERIFY (init_members());
 }
 
 rsm_protocol::status
