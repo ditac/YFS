@@ -448,6 +448,8 @@ rsm::invoke(int proc, viewstamp vs, std::string req, int &dummy)
 	}
 	std::string resp;
 	execute(proc,req,resp);
+	last_myvs = myvs;
+	myvs.seqno++;
 	return ret;
 }
 
