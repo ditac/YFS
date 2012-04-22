@@ -399,6 +399,7 @@ rsm::client_invoke(int procno, std::string req, std::string &r)
 
 	if(!amiprimary())
 	{
+		tprintf("NOT PRIMARY");
 		return rsm_client_protocol::NOTPRIMARY;
 	}
 
@@ -469,7 +470,7 @@ rsm::transferreq(std::string src, viewstamp last, unsigned vid,
 	tprintf("transferreq from %s (%d,%d) vs (%d,%d)\n", src.c_str(), 
 			last.vid, last.seqno, last_myvs.vid, last_myvs.seqno);
 	tprintf("Vid %u Insync Vid %u ", vid, vid_insync);
-	if (vid != vid_insync) {
+	if (!insync || vid != vid_insync) {
 		tprintf("Exit with busy");
 		return rsm_protocol::BUSY;
 	}

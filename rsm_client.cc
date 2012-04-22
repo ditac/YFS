@@ -27,9 +27,18 @@ rsm_client::rsm_client(std::string dst)
 void
 rsm_client::primary_failure()
 {
-  // You fill this in for Lab 7
-  primary = known_mems[1];
-  VERIFY (init_members());
+	std::vector<std::string> old_mems = known_mems;
+	known_mems.clear();
+	printf("We will run the loop for %d",old_mems.size());
+	for(unsigned i=0;i<old_mems.size();i++)
+	{
+  	primary = old_mems[i];
+		printf("Setting a new primary %s\n",primary.c_str());
+  	if(init_members())
+		{
+			return;
+		}
+	}
 }
 
 rsm_protocol::status
@@ -86,6 +95,7 @@ rsm_client::init_members()
   int ret;
   rpcc *cl = h.safebind();
   if (cl) {
+		printf("Primary bind worked");
     ret = cl->call(rsm_client_protocol::members, 0, known_mems, 
                    rpcc::to(1000)); 
   }
@@ -98,10 +108,10 @@ rsm_client::init_members()
   }
 
   primary = known_mems.back();
-  known_mems.pop_back();
+known_mems.pop_back();
 
-  printf("rsm_client::init_members: primary %s\n", primary.c_str());
+printf("rsm_client::init_members: primary %s\n", primary.c_str());
 
-  return true;
+return true;
 }
 

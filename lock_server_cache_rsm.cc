@@ -32,6 +32,7 @@ retrythread(void *x)
 lock_server_cache_rsm::lock_server_cache_rsm(class rsm *_rsm) 
   : rsm (_rsm)
 {
+	tprintf("We are being created");
   pthread_t th;
 	rsm->set_state_transfer(this);
   int r = pthread_create(&th, NULL, &revokethread, (void *) this);
@@ -41,6 +42,7 @@ lock_server_cache_rsm::lock_server_cache_rsm(class rsm *_rsm)
 	VERIFY(pthread_mutex_init(&gServerMutex, NULL) == 0);
 	VERIFY(pthread_cond_init(&grevoke_cv, NULL) == 0);
 	VERIFY(pthread_cond_init(&gretry_cv, NULL) == 0);
+	tprintf("Creation succesful");
 }
 
 void

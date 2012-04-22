@@ -184,6 +184,13 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
 				}	
 			}
 		}
+		else
+		{
+			if (ret == rpc_const::atmostonce_failure || 
+					ret == rpc_const::oldsrv_failure) {
+      			mgr.delete_handle(nodes[i]);
+    	}
+		}
 	}
   return true;
 }
@@ -215,6 +222,13 @@ proposer::accept(unsigned instance, std::vector<std::string> &accepts,
 				accepts.push_back(nodes[i]);
 			}
 		}
+		else
+		{
+			if (ret == rpc_const::atmostonce_failure || 
+					ret == rpc_const::oldsrv_failure) {
+      			mgr.delete_handle(nodes[i]);
+    	}
+		}
 	}
 }
 
@@ -235,6 +249,13 @@ proposer::decide(unsigned instance, std::vector<std::string> accepts,
 		a.v = v;
 		int r;
 		ret = cl->call(paxos_protocol::decidereq , accepts[i], a, r, rpcc::to(1000));
+		if(ret != paxos_protocol::OK)
+		{
+			if (ret == rpc_const::atmostonce_failure || 
+					ret == rpc_const::oldsrv_failure) {
+      			mgr.delete_handle(accepts[i]);
+    	}
+		}
 	}
 }
 
