@@ -426,6 +426,8 @@ rsm::client_invoke(int procno, std::string req, std::string &r)
 		execute(procno,req,r);
 	last_myvs = myvs;
 	myvs.seqno++;
+	breakpoint1();
+	partition1();
 	}
 
 	return ret;
@@ -450,6 +452,7 @@ rsm::invoke(int proc, viewstamp vs, std::string req, int &dummy)
 	execute(proc,req,resp);
 	last_myvs = myvs;
 	myvs.seqno++;
+	breakpoint1();
 	return ret;
 }
 

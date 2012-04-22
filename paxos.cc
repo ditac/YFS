@@ -155,12 +155,11 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
 	unsigned n = 0; 
 	for(unsigned i=0;i < nodes.size();i++)
 	{
-		sockaddr_in dstsock;
-		make_sockaddr(nodes[i].c_str(), &dstsock);
-		rpcc* cl = new rpcc(dstsock);
-		if (cl->bind(rpcc::to(1000)) < 0) {
-			printf("lock_server: call bind\n");
-			delete cl;
+  	handle h(nodes[i]);
+  	rpcc *cl = h.safebind();
+		if(cl ==  NULL) 
+		{
+			tprintf("bind failed on %s\n",nodes[i].c_str());
 			continue;
 		}
 		paxos_protocol::preparearg a;
@@ -173,7 +172,6 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
 			if(res.oldinstance)
 			{
 				acc->commit(instance,res.v_a);
-				delete cl;
 				return false;
 			}
 			else if(res.accept)
@@ -186,7 +184,6 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
 				}	
 			}
 		}
-		delete cl;
 	}
   return true;
 }
@@ -200,10 +197,9 @@ proposer::accept(unsigned instance, std::vector<std::string> &accepts,
 	int ret = 0;
 	for(unsigned i=0;i < nodes.size();i++)
 	{
-		sockaddr_in dstsock;
-		make_sockaddr(nodes[i].c_str(), &dstsock);
-		rpcc* cl = new rpcc(dstsock);
-		if (cl->bind(rpcc::to(1000)) < 0) {
+  	handle h(nodes[i]);
+  	rpcc *cl = h.safebind();
+		if (cl == NULL) {
 			printf("lock_server: call bind\n");
 		}
 		paxos_protocol::acceptarg a;
@@ -219,7 +215,6 @@ proposer::accept(unsigned instance, std::vector<std::string> &accepts,
 				accepts.push_back(nodes[i]);
 			}
 		}
-		delete cl;
 	}
 }
 
@@ -230,10 +225,9 @@ proposer::decide(unsigned instance, std::vector<std::string> accepts,
 	int ret = 0;
 	for(unsigned i=0;i < accepts.size();i++)
 	{
-		sockaddr_in dstsock;
-		make_sockaddr(accepts[i].c_str(), &dstsock);
-		rpcc* cl = new rpcc(dstsock);
-		if (cl->bind(rpcc::to(1000)) < 0) {
+  	handle h(accepts[i]);
+  	rpcc *cl = h.safebind();
+		if (cl == NULL) {
 			printf("lock_server: call bind\n");
 		}
 		paxos_protocol::decidearg a;
@@ -241,7 +235,6 @@ proposer::decide(unsigned instance, std::vector<std::string> accepts,
 		a.v = v;
 		int r;
 		ret = cl->call(paxos_protocol::decidereq , accepts[i], a, r, rpcc::to(1000));
-		delete cl;
 	}
 }
 
