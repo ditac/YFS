@@ -27,18 +27,7 @@ rsm_client::rsm_client(std::string dst)
 void
 rsm_client::primary_failure()
 {
-	std::vector<std::string> old_mems = known_mems;
-	known_mems.clear();
-	printf("We will run the loop for %d",old_mems.size());
-	for(unsigned i=0;i<old_mems.size();i++)
-	{
-  	primary = old_mems[i];
-		printf("Setting a new primary %s\n",primary.c_str());
-  	if(init_members())
-		{
-			return;
-		}
-	}
+	primary = known_mems[1];
 }
 
 rsm_protocol::status

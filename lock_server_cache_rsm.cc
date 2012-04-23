@@ -95,6 +95,7 @@ lock_server_cache_rsm::retryer()
 int lock_server_cache_rsm::acquire(lock_protocol::lockid_t lid, std::string id, 
              lock_protocol::xid_t xid, int &r)
 {
+	tprintf("Acquire Called %s with xid %d\n",id.c_str(),xid);
 	if(!rsm->amiprimary())
 	{
 		return rsm_client_protocol::NOTPRIMARY;
@@ -164,13 +165,18 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
 	pthread_mutex_lock(&gServerMutex);
 	r = nacquire;
   lock_protocol::status ret = lock_protocol::OK;
-	if(xid < locks[lid]->xidMap[id])
+	tprintf("Release called %s \n",id.c_str());
+	
+	if(locks[lid] && id == locks[lid]->ownerStr)
+	{
+	tprintf("Came here ");
+		std::map<std::string,lock_protocol::xid_t>::iterator xidMapIter = locks[lid]->xidMap.find(id);
+		if(xidMapIter != locks[lid]->xidMap.end() && xid < locks[lid]->xidMap[id])
 	{
 		pthread_mutex_unlock(&gServerMutex);
 		return ret;
 	}
-	if(id == locks[lid]->ownerStr)
-	{
+	tprintf("Failed before this called %s \n",id.c_str());
 		if(xid == locks[lid]->xidMap[id])
 		{
 		//This is ok
@@ -180,6 +186,7 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
 		lockData->ownerStr = "";
 		tprintf("Released %s \n",id.c_str());
 	}
+		tprintf("Release exit %s \n",id.c_str());
 	//lock_server_utility::released = true;
 	//pthread_cond_signal(&gretryThread_cv);
 	pthread_mutex_unlock(&gServerMutex);
