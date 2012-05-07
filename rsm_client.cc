@@ -28,6 +28,7 @@ void
 rsm_client::primary_failure()
 {
 	primary = known_mems[1];
+	known_mems.erase(known_mems.begin());
 }
 
 rsm_protocol::status

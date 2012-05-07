@@ -85,10 +85,44 @@ lock_server_cache_rsm::revoker()
 void
 lock_server_cache_rsm::retryer()
 {
-
-  // This method should be a continuous loop, waiting for locks
-  // to be released and then sending retry messages to those who
-  // are waiting for it.
+	pthread_mutex_lock(&gServerMutex);
+	while(true)
+	{
+		while(retryQ.size() == 0)
+		{
+			struct timespec timeToWait;
+			struct timeval now;
+			gettimeofday(&now,NULL);
+			timeToWait.tv_sec = now.tv_sec + 3;
+			timeToWait.tv_nsec = now.tv_usec*1000;
+			pthread_cond_timedwait(&gretry_cv, &gServerMutex,&timeToWait);
+		}
+		lock_protocol::lockid_t lid;
+		retryQ.deq(&lid);
+		lock* l = locks[lid];
+		tprintf("Retry Tried \n \n")
+		if(l->state == lock::free)
+		{ 
+			std::set<std::string> waitList = l->waitList;
+			std::set<std::string>::iterator waitListIter;
+			for(waitListIter = waitList.begin(); waitListIter != waitList.end() && l->state == lock::free 
+					; waitListIter++)
+			{
+				handle h(*waitListIter);
+				rpcc* cl = h.safebind();
+				int r;
+				pthread_mutex_unlock(&gServerMutex);
+				if(cl)
+				{
+					tprintf("Retry Sent\n\n");
+					lock_protocol::xid_t xid = 0;
+					cl->call(rlock_protocol::retry,lid,xid,r);
+				}
+				pthread_mutex_lock(&gServerMutex);
+			}
+		}
+	}
+	pthread_mutex_unlock(&gServerMutex);
 }
 
 
@@ -135,8 +169,9 @@ int lock_server_cache_rsm::acquire(lock_protocol::lockid_t lid, std::string id,
 			{
 				revokeQ.enq(lid);
 				locks[lid]->waitList.insert(id);
+				retryQ.enq(lid);
 				ret = lock_protocol::RETRY;
-				//tprintf("We told you to revoke");
+
 				pthread_cond_broadcast(&grevoke_cv);
 			}
 		break;
@@ -184,6 +219,7 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
 		lock* lockData = locks[lid];
 		lockData->state = lock::free;
 		lockData->ownerStr = "";
+		pthread_cond_broadcast(&gretry_cv);
 		tprintf("Released %s \n",id.c_str());
 	}
 		tprintf("Release exit %s \n",id.c_str());

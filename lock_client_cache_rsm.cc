@@ -246,7 +246,11 @@ rlock_protocol::status
 lock_client_cache_rsm::retry_handler(lock_protocol::lockid_t lid, 
 			         lock_protocol::xid_t xid, int &)
 {
+	pthread_mutex_lock(&gCltMutex);
   int ret = rlock_protocol::OK;
+	tprintf("Retry called \n\n");
+	pthread_cond_broadcast(&gRetry_cv);
+	pthread_mutex_unlock(&gCltMutex);
   return ret;
 }
 
