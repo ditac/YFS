@@ -157,9 +157,9 @@ void extent_server::pingNextServ()
 		return;
   }
 	std::string data;
-	printf("Failed after this");
   cl->call(extent_protocol::addNext, port, startId, endId, data);
-	delete cl;
+
+		delete cl;
 }
 
 void extent_server::pingPrevServ()
@@ -186,6 +186,27 @@ void extent_server::pingPrevServ()
 	startId = mid;
 	endId = end;
   cl->call(extent_protocol::addPrev, port, mid, end,data);
+	ss.str(data);
+	char buf[512];
+	while(ss.getline(buf,512,'['))
+	{
+		extent_protocol::extentid_t newId = atoi(buf);
+		extent_protocol::attr a;
+		ss.getline(buf,512,'[');
+		std::string fileCont(buf);
+		ss.getline(buf,512,'[');
+		a.atime = atoi(buf);
+		ss.getline(buf,512,'[');
+		a.mtime = atoi(buf); 
+		ss.getline(buf,512,'[');
+		a.ctime = atoi(buf);
+		ss.getline(buf,512,'[');
+		a.size = atoi(buf);
+		fileVal val(buf,a);
+		fileList[newId] = val;
+	}
+
+	std::cout << "Final Size   " << fileList.size();
 	delete cl;
 }
 
@@ -194,15 +215,39 @@ int extent_server::addNext(int port, extent_protocol::extentid_t start,
 {
 	ScopedLock rwl(&extent_server_m_);
 	prevServ = port;
-	return extent_protocol::OK;
+		return extent_protocol::OK;
 }
 
 int extent_server::addPrev(int port, extent_protocol::extentid_t start,
-			extent_protocol::extentid_t end, std::string &)
+			extent_protocol::extentid_t end, std::string &data)
 {
 	ScopedLock rwl(&extent_server_m_);
 	nextServ = port;
 	endId = start - 1;
+	std::map<extent_protocol::extentid_t,fileVal>::iterator iter;
+	std::stringstream ss;//create a stringstream
+	for(iter = fileList.begin();iter!= fileList.end();iter++)
+	{
+		if(iter->first >= start)
+		{
+		ss << (iter->first);
+		ss << '[';
+		ss << (iter->second.buf);
+		ss << '[';
+		ss << (iter->second.attr.atime);
+		ss << '[';
+		ss << (iter->second.attr.mtime);
+		ss << '[';
+		ss << (iter->second.attr.ctime);
+		ss << '[';
+		ss << (iter->second.attr.size);
+		ss << '[';
+		}
+	}
+	data = ss.str();
+
+	std::cout << "DATA----";
+	std::cout << data;
 	return extent_protocol::OK;
 }
 

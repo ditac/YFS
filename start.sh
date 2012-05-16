@@ -50,9 +50,8 @@ unset RPC_LOSSY
 echo "starting ./extent_server $EXTENT_PORT > extent_server.log 2>&1 &"
 ./extent_server $EXTENT_PORT 0 $(($EXTENT_PORT + 0)) $(($EXTENT_PORT + 0))> extent_server.log 2>&1 &
 ./extent_server $(($EXTENT_PORT + 1)) 1 $(($EXTENT_PORT + 0)) $(($EXTENT_PORT + 0))> extent_server1.log 2>&1 &
-./extent_server $(($EXTENT_PORT + 2)) 2 $(($EXTENT_PORT + 0)) $(($EXTENT_PORT + 1))> extent_server2.log 2>&1 &
-#./extent_server $(($EXTENT_PORT + 1)) 1 $(($EXTENT_PORT + 2))> extent_server1.log 2>&1 &
-#./extent_server $(($EXTENT_PORT + 3)) 3 $EXTENT_PORT > extent_server3.log 2>&1 &
+#./extent_server $(($EXTENT_PORT + 2)) 2 $(($EXTENT_PORT + 0)) $(($EXTENT_PORT + 1))> extent_server2.log 2>&1 &
+#./extent_server $(($EXTENT_PORT + 3)) 3 $(($EXTENT_PORT + 0)) $(($EXTENT_PORT + 2))> extent_server3.log 2>&1 &
 sleep 1
 
 rm -rf $YFSDIR1
