@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-extent_server::extent_server(int port,int id) 
+extent_server::extent_server(int port,int id,int next,int prev) 
 {
 	VERIFY(pthread_mutex_init(&extent_server_m_, 0) == 0);
 	std::string buf;
@@ -19,16 +19,27 @@ extent_server::extent_server(int port,int id)
 	a.ctime = (unsigned int) time(NULL);
 	this->port = port;
 	this->id = id;
-	fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(0x00000001,fileVal(buf,a)));
+	nextServ = next;
+	prevServ = prev;
+	printf("Next Server id %d and Prev id %d \n\n", next, prev);
+	if(next == 0 && prev == 0)
+	{
+		startId = 0;
+		endId = 4294967295;
+		fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(0x00000001,fileVal(buf,a)));
+	}
+	pingNextServ();
+	pingPrevServ();
+	printf("Starting id %llu and Ending id %llu \n\n", startId, endId);
 }
 
 
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
 	ScopedLock rwl(&extent_server_m_);
-	printf("Putting %d and my id %d \n",id, this->id);
 	if(belongsToMe(id))
 	{
+		printf("Putting %llu and my id %d \n",id, this->id);
 		extent_protocol::attr a;
 		a.size = buf.size();
 		a.atime = 0;
@@ -48,9 +59,9 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
 	ScopedLock rwl(&extent_server_m_);
-	printf("Getting %d and my id %d \n",id, this->id);
 	if(belongsToMe(id))
 	{
+		printf("Getting %llu and my id %d \n",id, this->id);
 		extent_protocol::xxstatus retVal = extent_protocol::NOENT;
 		fileListIter iter = fileList.find(id);
 		if(iter != fileList.end())
@@ -115,16 +126,95 @@ int extent_server::getServer(extent_protocol::extentid_t id, int &ret)
 {
 	ScopedLock rwl(&extent_server_m_);
 	extent_protocol::xxstatus retVal = extent_protocol::OK;
-	int val = id%4;	
-	ret = port + val;
+	ret = nextServ; 
 	return retVal;
 }
 
 
 bool extent_server::belongsToMe(extent_protocol::extentid_t eid)
 {
-	if(id == eid%4)
+	if(eid >= startId && eid <= endId )
+	{
 		return true;
+	}
 	return false;
+}
+
+void extent_server::pingNextServ()
+{
+	std::stringstream ss;//create a stringstream
+
+	if(nextServ ==  0)
+		return;
+	ss.str("");
+	ss << nextServ;
+	
+	sockaddr_in dstsock;
+  make_sockaddr(ss.str().c_str(), &dstsock);
+	rpcc *cl = new rpcc(dstsock);
+  if (cl->bind() != 0) {
+    printf("extent_client: bind failed\n");
+		return;
+  }
+	std::string data;
+	printf("Failed after this");
+  cl->call(extent_protocol::addNext, port, startId, endId, data);
+	delete cl;
+}
+
+void extent_server::pingPrevServ()
+{
+	std::stringstream ss;//create a stringstream
+
+	if(prevServ ==  0)
+		return;
+	ss.str("");
+	ss << prevServ;
+	
+	sockaddr_in dstsock;
+  make_sockaddr(ss.str().c_str(), &dstsock);
+	rpcc *cl = new rpcc(dstsock);
+  if (cl->bind() != 0) {
+    printf("extent_client: bind failed\n");
+		return;
+  }
+	std::string data;
+	extent_protocol::extentid_t mid = 0;
+	extent_protocol::extentid_t end = 0;
+  cl->call(extent_protocol::getExtentMid, port, mid);
+  cl->call(extent_protocol::getExtentEnd, port, end);
+	startId = mid;
+	endId = end;
+  cl->call(extent_protocol::addPrev, port, mid, end,data);
+	delete cl;
+}
+
+int extent_server::addNext(int port, extent_protocol::extentid_t start,
+			extent_protocol::extentid_t end, std::string &data)
+{
+	ScopedLock rwl(&extent_server_m_);
+	prevServ = port;
+	return extent_protocol::OK;
+}
+
+int extent_server::addPrev(int port, extent_protocol::extentid_t start,
+			extent_protocol::extentid_t end, std::string &)
+{
+	ScopedLock rwl(&extent_server_m_);
+	nextServ = port;
+	endId = start - 1;
+	return extent_protocol::OK;
+}
+
+int extent_server::getExtentMid(int port,extent_protocol::extentid_t &mid)
+{
+	mid = startId + (endId - startId)/2;	
+	return extent_protocol::OK;
+}
+
+int extent_server::getExtentEnd(int port,extent_protocol::extentid_t &end)
+{
+	end = endId;	
+	return extent_protocol::OK;
 }
 

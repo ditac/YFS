@@ -15,7 +15,11 @@ class extent_protocol {
     get,
     getattr,
     remove,
-		getServer
+		getServer,
+		addNext,
+		addPrev,
+		getExtentMid,
+		getExtentEnd
   };
 
   struct attr {
