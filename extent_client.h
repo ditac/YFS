@@ -10,6 +10,9 @@
 class extent_client {
  private:
   rpcc *cl;
+	rpcc *cl1;
+	rpcc *cl2;
+	rpcc *cl3;
 
  public:
   extent_client(std::string dst);
@@ -20,6 +23,7 @@ class extent_client {
 				  extent_protocol::attr &a);
   extent_protocol::status put(extent_protocol::extentid_t eid, std::string buf);
   extent_protocol::status remove(extent_protocol::extentid_t eid);
+	rpcc* getServerForId(extent_protocol::extentid_t eid);
 };
 
 #endif 

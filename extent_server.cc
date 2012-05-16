@@ -8,15 +8,17 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-extent_server::extent_server() 
+extent_server::extent_server(int port,int id) 
 {
 	VERIFY(pthread_mutex_init(&extent_server_m_, 0) == 0);
 	std::string buf;
 	extent_protocol::attr a;
 	a.size = buf.size();
-  a.atime = 0;
-  a.mtime = (unsigned int) time(NULL);
-  a.ctime = (unsigned int) time(NULL);
+	a.atime = 0;
+	a.mtime = (unsigned int) time(NULL);
+	a.ctime = (unsigned int) time(NULL);
+	this->port = port;
+	this->id = id;
 	fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(0x00000001,fileVal(buf,a)));
 }
 
@@ -24,58 +26,105 @@ extent_server::extent_server()
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
 	ScopedLock rwl(&extent_server_m_);
-	extent_protocol::attr a;
-	a.size = buf.size();
-  a.atime = 0;
-  a.mtime = (unsigned int) time(NULL);
-  a.ctime = (unsigned int) time(NULL);
-	fileVal val(buf,a);
-	fileList[id] = val;
-	fileListIter iter = fileList.find(1);
-  return extent_protocol::OK;
+	printf("Putting %d and my id %d \n",id, this->id);
+	if(belongsToMe(id))
+	{
+		extent_protocol::attr a;
+		a.size = buf.size();
+		a.atime = 0;
+		a.mtime = (unsigned int) time(NULL);
+		a.ctime = (unsigned int) time(NULL);
+		fileVal val(buf,a);
+		fileList[id] = val;
+		fileListIter iter = fileList.find(1);
+		return extent_protocol::OK;
+	}
+	else
+	{
+		return extent_protocol::ASK_SOMEONE_ELSE;
+	}
 }
 
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
 	ScopedLock rwl(&extent_server_m_);
-	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
-	fileListIter iter = fileList.find(id);
-	if(iter != fileList.end())
+	printf("Getting %d and my id %d \n",id, this->id);
+	if(belongsToMe(id))
 	{
-		buf = iter->second.buf;
-		iter->second.attr.atime = (unsigned int) time(NULL);
-		fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(id,iter->second));
-		retVal = extent_protocol::OK;	
+		extent_protocol::xxstatus retVal = extent_protocol::NOENT;
+		fileListIter iter = fileList.find(id);
+		if(iter != fileList.end())
+		{
+			buf = iter->second.buf;
+			iter->second.attr.atime = (unsigned int) time(NULL);
+			fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(id,iter->second));
+			retVal = extent_protocol::OK;	
+		}
+		return retVal;
 	}
-  return retVal;
+	else
+	{
+		return extent_protocol::ASK_SOMEONE_ELSE;
+	}
 }
 
 int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr &a)
 {
 	ScopedLock rwl(&extent_server_m_);
-	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
-	fileListIter iter = fileList.find(id);
-	if(iter != fileList.end())
+	if(belongsToMe(id))
 	{
-		a.size = iter->second.attr.size;
-		a.atime = iter->second.attr.atime;
-  	a.mtime = iter->second.attr.mtime;
-  	a.ctime = iter->second.attr.ctime;
-		retVal = extent_protocol::OK;	
+		extent_protocol::xxstatus retVal = extent_protocol::NOENT;
+		fileListIter iter = fileList.find(id);
+		if(iter != fileList.end())
+		{
+			a.size = iter->second.attr.size;
+			a.atime = iter->second.attr.atime;
+			a.mtime = iter->second.attr.mtime;
+			a.ctime = iter->second.attr.ctime;
+			retVal = extent_protocol::OK;	
+		}
+		return retVal;
 	}
-  return retVal;
+	else
+	{
+		return extent_protocol::ASK_SOMEONE_ELSE;
+	}
 }
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
 	ScopedLock rwl(&extent_server_m_);
-	extent_protocol::xxstatus retVal = extent_protocol::NOENT;
-	fileListIter iter = fileList.find(id);
-	if(iter != fileList.end())
+	if(belongsToMe(id))
 	{
-		fileList.erase(id);
-		retVal = extent_protocol::OK;
+		extent_protocol::xxstatus retVal = extent_protocol::NOENT;
+		fileListIter iter = fileList.find(id);
+		if(iter != fileList.end())
+		{
+			fileList.erase(id);
+			retVal = extent_protocol::OK;
+		}
+		return retVal;
 	}
-  return retVal;
+	else
+	{
+		return extent_protocol::ASK_SOMEONE_ELSE;
+	}
+}
+
+int extent_server::getServer(extent_protocol::extentid_t id, int &ret)
+{
+	ScopedLock rwl(&extent_server_m_);
+	extent_protocol::xxstatus retVal = extent_protocol::OK;
+	int val = id%4;	
+	ret = port + val;
+	return retVal;
+}
+
+
+bool extent_server::belongsToMe(extent_protocol::extentid_t eid)
+{
+	if(id == eid%4)
+		return true;
+	return false;
 }
 
