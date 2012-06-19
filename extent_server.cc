@@ -26,6 +26,7 @@ extent_server::extent_server(int port,int id,int next,int prev)
 	{
 		startId = 0;
 		endId = 4294967295;
+		//endId = 2147483647;
 		fileList.insert(std::pair<extent_protocol::extentid_t,fileVal>(0x00000001,fileVal(buf,a)));
 	}
 	pingNextServ();
@@ -159,7 +160,7 @@ void extent_server::pingNextServ()
 	std::string data;
   cl->call(extent_protocol::addNext, port, startId, endId, data);
 
-		delete cl;
+	delete cl;
 }
 
 void extent_server::pingPrevServ()
